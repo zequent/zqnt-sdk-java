@@ -1,0 +1,263 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>com.zqnt.sdk</groupId>
+    <artifactId>edge-java-sdk</artifactId>
+    <version>3.0.0-SNAPSHOT</version>
+    <name>Zequent Java Edge SDK</name>
+    <description>A Java SDK for Zequent's Edge services, built on Quarkus and gRPC, designed for seamless integration
+        with Java applications.
+    </description>
+    <url>https://github.com/zequent/zqnt-edge-sdk-java</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Zequent Development Team</name>
+            <email>dev@zequent.com</email>
+            <organization>Zequent</organization>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:https://github.com/zequent/zqnt-edge-sdk-java.git</connection>
+        <developerConnection>scm:git:https://github.com/zequent/zqnt-edge-sdk-java.git</developerConnection>
+        <url>https://github.com/zequent/zqnt-edge-sdk-java</url>
+        <tag>HEAD</tag>
+    </scm>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.release>21</maven.compiler.release>
+        <compiler-plugin.version>3.11.0</compiler-plugin.version>
+        <surefire-plugin.version>3.2.5</surefire-plugin.version>
+        <grpc.version>1.76.0</grpc.version>
+        <slf4j.version>2.0.12</slf4j.version>
+        <lombok.version>1.18.42</lombok.version>
+        <protobuf.version>3.25.9</protobuf.version>
+        <proguard.version>7.9.1</proguard.version>
+        <jackson.version>2.18.11</jackson.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- jackson 2.x arrives transitively through zqnt-api-java (2.18.11 at the pinned
+                 preview); pinned here for CVE-2026-68497. -->
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>${jackson.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- GitHub Packages Repository -->
+    <repositories>
+        <repository>
+            <id>zqnt-api-repo</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-api-java</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+
+    <dependencies>
+        <dependency>
+            <groupId>com.zqnt</groupId>
+            <artifactId>zqnt-api-java</artifactId>
+            <!-- preview (zequent/zqnt-api-java#8); the release version once it is tagged -->
+            <version>3.0.0-PR8-6f7efdf-SNAPSHOT</version>
+        </dependency>
+        <!-- Platform token verification (auth/PlatformTokenVerifier); version from jackson-bom -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <!-- gRPC dependencies -->
+
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-stub</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-api</artifactId>
+            <version>${grpc.version}</version>
+        </dependency>
+
+        <!-- Protobuf -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>${protobuf.version}</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>${slf4j.version}</version>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>${lombok.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Test dependencies -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.2</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-netty-shaded</artifactId>
+            <version>${grpc.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${compiler-plugin.version}</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${surefire-plugin.version}</version>
+            </plugin>
+            <plugin>
+                <groupId>io.smallrye</groupId>
+                <artifactId>jandex-maven-plugin</artifactId>
+                <version>3.2.2</version>
+                <executions>
+                    <execution>
+                        <id>make-index</id>
+                        <goals>
+                            <goal>jandex</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+        </plugins>
+    </build>
+
+    <profiles>
+        <!--
+            Customer-facing build. ProGuard overwrites the regular Maven JAR,
+            so deploy/install publishes the protected artifact without a classifier.
+        -->
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-enforcer-plugin</artifactId>
+                        <version>3.6.2</version>
+                        <executions>
+                            <execution>
+                                <id>require-release-jdk</id>
+                                <goals>
+                                    <goal>enforce</goal>
+                                </goals>
+                                <configuration>
+                                    <rules>
+                                        <requireJavaVersion>
+                                            <version>[21,22)</version>
+                                            <message>The release profile must run with JDK 21.</message>
+                                        </requireJavaVersion>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>com.github.wvengen</groupId>
+                        <artifactId>proguard-maven-plugin</artifactId>
+                        <version>2.7.0</version>
+                        <dependencies>
+                            <dependency>
+                                <groupId>com.guardsquare</groupId>
+                                <artifactId>proguard-base</artifactId>
+                                <version>${proguard.version}</version>
+                                <scope>runtime</scope>
+                            </dependency>
+                        </dependencies>
+                        <executions>
+                            <execution>
+                                <id>obfuscate-main-artifact</id>
+                                <phase>package</phase>
+                                <goals>
+                                    <goal>proguard</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <injar>${project.build.finalName}.jar</injar>
+                            <!-- attach=false and no outjar makes ProGuard replace the main JAR. -->
+                            <attach>false</attach>
+                            <attachMap>false</attachMap>
+                            <attachSeed>false</attachSeed>
+                            <proguardVersion>${proguard.version}</proguardVersion>
+                            <libs>
+                                <lib>${java.home}/jmods/java.base.jmod</lib>
+                            </libs>
+                            <proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+    <!-- Publishing Configuration - GitHub Packages -->
+    <distributionManagement>
+        <repository>
+            <id>zqnt-edge-sdk-repo</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-edge-sdk-java</url>
+        </repository>
+        <snapshotRepository>
+            <id>zqnt-edge-sdk-repo</id>
+            <name>GitHub Packages</name>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-edge-sdk-java</url>
+        </snapshotRepository>
+    </distributionManagement>
+
+</project>
