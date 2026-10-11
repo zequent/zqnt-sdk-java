@@ -82,8 +82,8 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           {
             echo "Java previews:"
-            echo "- \`com.zqnt.sdk:edge-java-sdk:${VERSION}\`"
-            echo "- \`com.zqnt.sdk:client-java-sdk:${VERSION}\`"
+            echo "- \`com.zqnt:zqnt-sdk-java-edge:${VERSION}\`"
+            echo "- \`com.zqnt:zqnt-sdk-java-client:${VERSION}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set version
@@ -102,7 +102,7 @@ jobs:
             const version = '${{ steps.version.outputs.version }}';
             const dep = (artifact) => [
               '<dependency>',
-              '    <groupId>com.zqnt.sdk</groupId>',
+              '    <groupId>com.zqnt</groupId>',
               `    <artifactId>${artifact}</artifactId>`,
               `    <version>${version}</version>`,
               '</dependency>',
@@ -113,8 +113,8 @@ jobs:
               'Repository: `https://maven.pkg.github.com/Zequent/zqnt-sdk-java`',
               '',
               '```xml',
-              dep('edge-java-sdk'),
-              dep('client-java-sdk'),
+              dep('zqnt-sdk-java-edge'),
+              dep('zqnt-sdk-java-client'),
               '```',
             ].join('\n');
             github.rest.issues.createComment({

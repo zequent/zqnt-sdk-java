@@ -4,11 +4,11 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
-        <groupId>com.zqnt.sdk</groupId>
+        <groupId>com.zqnt</groupId>
         <artifactId>zqnt-sdk-java</artifactId>
         <version>3.0.0-SNAPSHOT</version>
     </parent>
-    <artifactId>edge-java-sdk</artifactId>
+    <artifactId>zqnt-sdk-java-edge</artifactId>
     <name>Zequent Java Edge SDK</name>
     <description>A Java SDK for Zequent's Edge services, built on Quarkus and gRPC, designed for seamless integration
         with Java applications.
@@ -20,7 +20,7 @@
 
     <dependencyManagement>
         <dependencies>
-            <!-- jackson 2.x arrives transitively through zqnt-api-java (2.18.11 at the pinned
+            <!-- jackson 2.x arrives transitively through zqnt-api (2.18.11 at the pinned
                  preview); pinned here for CVE-2026-68497. -->
             <dependency>
                 <groupId>com.fasterxml.jackson</groupId>
@@ -35,7 +35,7 @@
     <dependencies>
         <dependency>
             <groupId>com.zqnt</groupId>
-            <artifactId>zqnt-api-java</artifactId>
+            <artifactId>zqnt-api</artifactId>
         </dependency>
         <!-- Platform token verification (auth/PlatformTokenVerifier); version from jackson-bom -->
         <dependency>

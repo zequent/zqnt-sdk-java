@@ -32,7 +32,7 @@ jobs:
       - name: Set version
         run: mvn -B versions:set -DnewVersion=${{ steps.version.outputs.version }} -DgenerateBackupPoms=false -DprocessAllModules=true
 
-      - name: Deploy edge-java-sdk and client-java-sdk
+      - name: Deploy zqnt-sdk-java-edge and zqnt-sdk-java-client
         run: mvn -B -Prelease deploy --settings .github/maven-settings.xml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,6 +46,6 @@ jobs:
           generate_release_notes: true
           prerelease: false
           body: |
-            Published to GitHub Packages as `com.zqnt.sdk:edge-java-sdk:${{ steps.version.outputs.version }}` and `com.zqnt.sdk:client-java-sdk:${{ steps.version.outputs.version }}`.
+            Published to GitHub Packages as `com.zqnt:zqnt-sdk-java-edge:${{ steps.version.outputs.version }}` and `com.zqnt:zqnt-sdk-java-client:${{ steps.version.outputs.version }}`.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
