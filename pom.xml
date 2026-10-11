@@ -3,7 +3,7 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.zqnt.sdk</groupId>
+    <groupId>com.zqnt</groupId>
     <artifactId>zqnt-sdk-java</artifactId>
     <version>3.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
@@ -51,14 +51,14 @@
         <lombok.version>1.18.42</lombok.version>
         <junit.version>5.10.2</junit.version>
         <proguard.version>7.9.1</proguard.version>
-        <zqnt-api.version>3.0.0-PR26-eeab00f-SNAPSHOT</zqnt-api.version>
+        <zqnt-api.version>3.0.0-PR2-c3bcf24-SNAPSHOT</zqnt-api.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
             <dependency>
                 <groupId>com.zqnt</groupId>
-                <artifactId>zqnt-api-java</artifactId>
+                <artifactId>zqnt-api</artifactId>
                 <version>${zqnt-api.version}</version>
             </dependency>
         </dependencies>
@@ -68,7 +68,7 @@
         <repository>
             <id>zqnt-api-repo</id>
             <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-api-java</url>
+            <url>https://maven.pkg.github.com/Zequent/zqnt-api</url>
             <releases>
                 <enabled>true</enabled>
             </releases>

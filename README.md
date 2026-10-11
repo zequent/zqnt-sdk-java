@@ -4,10 +4,10 @@ Two libraries in one Maven build, released together under one version:
 
 | Module | Artifact | For |
 |---|---|---|
-| [`edge/`](edge) | `com.zqnt.sdk:edge-java-sdk` | adapters that connect devices to the platform |
-| [`client/`](client) | `com.zqnt.sdk:client-java-sdk` | applications that use the platform |
+| [`edge/`](edge) | `com.zqnt:zqnt-sdk-java-edge` | adapters that connect devices to the platform |
+| [`client/`](client) | `com.zqnt:zqnt-sdk-java-client` | applications that use the platform |
 
-Both build on the public API types `com.zqnt:zqnt-api-java` ([zqnt-api](https://github.com/zequent/zqnt-api)).
+Both build on the public API types `com.zqnt:zqnt-api` ([zqnt-api](https://github.com/zequent/zqnt-api)).
 
 ## Installation
 
@@ -21,13 +21,13 @@ Both artifacts are published to GitHub Packages:
     </repository>
     <repository>
         <id>zqnt-api-repo</id>
-        <url>https://maven.pkg.github.com/Zequent/zqnt-api-java</url>
+        <url>https://maven.pkg.github.com/Zequent/zqnt-api</url>
     </repository>
 </repositories>
 
 <dependency>
-    <groupId>com.zqnt.sdk</groupId>
-    <artifactId>edge-java-sdk</artifactId>      <!-- or client-java-sdk -->
+    <groupId>com.zqnt</groupId>
+    <artifactId>zqnt-sdk-java-edge</artifactId>      <!-- or zqnt-sdk-java-client -->
     <version>3.0.0</version>
 </dependency>
 ```
@@ -89,7 +89,7 @@ public class AcmeDrone extends RegistryEdgeAdapter {
 |---|---|---|
 | Command progress/completion | `LiveDataServiceImpl` with an `EdgeGatewayClient` sends the events adapters already produce (`CommandExecutionEventData`) as `EdgeGatewayService.PublishCommandEvent`, under the platform's `command_execution_id` | v2 notification stream, as before |
 | Capabilities | `CapabilityReporter.track(sn)`: `ReportCapabilities` at start and on every registry change, retried until it succeeds | `RemoteControlService.ReportAssetRuntime` (no telemetry fields); it replaces the whole runtime snapshot, so an adapter that reports detected payloads passes its own `V2CapabilityReport` to `EdgeGatewayClient` |
-| Telemetry, detections, alerts | `TelemetryPublisher.publish(TelemetrySample / DetectionBatch / Alert)`: one long-lived `TelemetryIngestService` stream per kind, reconnected with backoff | `ProduceTelemetry`/`ProduceDetection`; catalog keys in a sample's `details` land in their v2 fields (`TelemetrySampleMapper` from zqnt-api-java), other keys and all alerts are dropped |
+| Telemetry, detections, alerts | `TelemetryPublisher.publish(TelemetrySample / DetectionBatch / Alert)`: one long-lived `TelemetryIngestService` stream per kind, reconnected with backoff | `ProduceTelemetry`/`ProduceDetection`; catalog keys in a sample's `details` land in their v2 fields (`TelemetrySampleMapper` from zqnt-api), other keys and all alerts are dropped |
 
 After UNIMPLEMENTED the SDK stays on v2 for 10 minutes, then tries v3 again. Every command event
 carries `occurred_at` (now, when the adapter gave none). `EdgeGatewayClient` uses the
@@ -172,8 +172,8 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
 
 ```xml
 <dependency>
-    <groupId>com.zqnt.sdk</groupId>
-    <artifactId>client-java-sdk</artifactId>
+    <groupId>com.zqnt</groupId>
+    <artifactId>zqnt-sdk-java-client</artifactId>
     <version>3.0.0</version>
 </dependency>
 ```
@@ -523,12 +523,14 @@ their history is kept here under `edge/` and `client/`. The 2.x line stays in th
 
 | | Before (2.x) | Now (3.0) |
 |---|---|---|
-| Edge SDK artifact | `com.zqnt.sdk:edge-java-sdk` | unchanged |
-| Client SDK artifact | `com.zqnt.sdk:client-java-sdk` | unchanged |
+| Edge SDK artifact | `com.zqnt.sdk:edge-java-sdk` | `com.zqnt:zqnt-sdk-java-edge` |
+| Client SDK artifact | `com.zqnt.sdk:client-java-sdk` | `com.zqnt:zqnt-sdk-java-client` |
+| API types | `com.zqnt:zqnt-api-java` (`.../Zequent/zqnt-api-java`) | `com.zqnt:zqnt-api` (`.../Zequent/zqnt-api`) |
 | Maven repository | `https://maven.pkg.github.com/Zequent/zqnt-edge-sdk-java`, `.../zqnt-client-sdk-java` | `https://maven.pkg.github.com/Zequent/zqnt-sdk-java` |
 
-Java packages (`com.zqnt.sdk.edge.*`, `com.zqnt.sdk.client.*`) are unchanged: only the repository
-URL and the version change. Moving from the 2.x typed calls to commands: [client/MIGRATION.md](client/MIGRATION.md).
+Java packages (`com.zqnt.sdk.edge.*`, `com.zqnt.sdk.client.*`) are unchanged: only the dependency
+coordinates, the repository URL and the version change. The old artifact names stay with the 2.x
+packages of the old repositories; never put old and new artifacts on one classpath (duplicate classes). Moving from the 2.x typed calls to commands: [client/MIGRATION.md](client/MIGRATION.md).
 
 ## License
 
