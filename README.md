@@ -1,12 +1,148 @@
-# Zequent Client SDK
+# Zequent SDK for Java
+
+Two libraries in one Maven build, released together under one version:
+
+| Module | Artifact | For |
+|---|---|---|
+| [`edge/`](edge) | `com.zqnt.sdk:edge-java-sdk` | adapters that connect devices to the platform |
+| [`client/`](client) | `com.zqnt.sdk:client-java-sdk` | applications that use the platform |
+
+Both build on the public API types `com.zqnt:zqnt-api-java` ([zqnt-api](https://github.com/zequent/zqnt-api)).
+
+## Installation
+
+Both artifacts are published to GitHub Packages:
+
+```xml
+<repositories>
+    <repository>
+        <id>zqnt-sdk-repo</id>
+        <url>https://maven.pkg.github.com/Zequent/zqnt-sdk-java</url>
+    </repository>
+    <repository>
+        <id>zqnt-api-repo</id>
+        <url>https://maven.pkg.github.com/Zequent/zqnt-api-java</url>
+    </repository>
+</repositories>
+
+<dependency>
+    <groupId>com.zqnt.sdk</groupId>
+    <artifactId>edge-java-sdk</artifactId>      <!-- or client-java-sdk -->
+    <version>3.0.0</version>
+</dependency>
+```
+
+Pull requests publish previews `3.0.0-PR<n>-<sha>-SNAPSHOT` of both artifacts. Release tags `vX.Y.Z`
+publish `X.Y.Z`. Published JARs are ProGuard-processed (`-Prelease`, JDK 21).
+
+```bash
+mvn verify                 # both modules
+mvn -pl edge verify        # one module
+mvn -Prelease verify       # with ProGuard, as CI and the published artifacts
+```
+
+## Edge SDK
+
+
+### Writing an adapter (v3)
+
+An adapter registers each command once: dotted id, input and output JSON Schema, handler.
+
+```java
+public class AcmeDrone extends RegistryEdgeAdapter {
+
+    public AcmeDrone(AcmeLink link) {
+        super(AssetTypeEnum.ASSET_TYPE_AIRCRAFT);
+        Capability takeoff = registerCommand("flight.takeoff",
+                Map.of("type", "object", "properties", Map.of(
+                        "altitude", Map.of("type", "number", "minimum", 2, "maximum", 120))),
+                Map.of(),
+                request -> link.takeOff(request.params())
+                        .thenApply(flightId -> CommandResult.accepted("climbing", flightId, request.sn())));
+        takeoff.setCompletion(CompletionMode.COMPLETION_MODE_ASYNCHRONOUS);
+        commands().declareTelemetryField(TelemetryField.newBuilder().setKey("drone.gear")
+                .setType(TelemetryValueType.TELEMETRY_VALUE_TYPE_NUMBER).build());
+    }
+}
+```
+
+- `commands().setPayloads(sn, payloads)` sets the devices mounted on an asset (camera, speaker,
+  spotlight, ...); they go out with the v3 capabilities as a full snapshot, so a payload left out is
+  detached. A command acting on one targets it with `CAPABILITY_TARGET_TYPE_PAYLOAD` and the payload's ref.
+- `GetCapabilities` (v2 and v3) is derived from the registry only. v2 typed RPCs (`takeOff`, ...),
+  v2 `SendCustomCommand` and v3 `ExecuteCommand` all run the same handler. The typed methods of
+  `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
+- Params are validated against the input schema before the handler runs, and numbers are converted
+  to `Integer`/`Long` where the schema says `integer`. Invalid params are REJECTED with error code
+  `command.invalid_params` and a readable message; an unknown id with `command.not_supported`.
+- **Risk:** every capability carries a `CommandSafety`. A standard id gets the rating of the
+  platform's command catalog (`CommandCatalog`, e.g. `flight.takeoff` MOVE, `flight.land` CRITICAL,
+  `camera.take_photo` OBSERVE); `capability.setSafety(...)` overrides it. A `vendor.*` command that
+  moves or affects the asset must declare its own: an id outside the catalog declares none, and the
+  platform then falls back to the 2.x prefix rule.
+- Serve both contracts: `EdgeAdapterGrpcServiceImpl` (v2) and `EdgeAdapterV3GrpcServiceImpl` (v3),
+  e.g. as `@GrpcService` subclasses in Quarkus.
+
+### Talking to the platform
+
+| What | v3 (preferred) | Against an older platform (UNIMPLEMENTED) |
+|---|---|---|
+| Command progress/completion | `LiveDataServiceImpl` with an `EdgeGatewayClient` sends the events adapters already produce (`CommandExecutionEventData`) as `EdgeGatewayService.PublishCommandEvent`, under the platform's `command_execution_id` | v2 notification stream, as before |
+| Capabilities | `CapabilityReporter.track(sn)`: `ReportCapabilities` at start and on every registry change, retried until it succeeds | `RemoteControlService.ReportAssetRuntime` (no telemetry fields); it replaces the whole runtime snapshot, so an adapter that reports detected payloads passes its own `V2CapabilityReport` to `EdgeGatewayClient` |
+| Telemetry, detections, alerts | `TelemetryPublisher.publish(TelemetrySample / DetectionBatch / Alert)`: one long-lived `TelemetryIngestService` stream per kind, reconnected with backoff | `ProduceTelemetry`/`ProduceDetection`; catalog keys in a sample's `details` land in their v2 fields (`TelemetrySampleMapper` from zqnt-api-java), other keys and all alerts are dropped |
+
+After UNIMPLEMENTED the SDK stays on v2 for 10 minutes, then tries v3 again. Every command event
+carries `occurred_at` (now, when the adapter gave none). `EdgeGatewayClient` uses the
+remote-control channel, `TelemetryPublisher` the live-data channel; the existing v2 `LiveDataService`
+API is unchanged.
+
+```java
+EdgeGatewayClient gateway = new EdgeGatewayClient(remoteControlChannel);
+LiveDataService liveData = new LiveDataServiceImpl(telemetryMapper, detectionMapper, notificationMapper,
+        LiveDataServiceGrpc.newStub(liveDataChannel), gateway);
+new CapabilityReporter(adapter, gateway).track(sn);
+TelemetryPublisher telemetry = new TelemetryPublisher(liveDataChannel, liveData);
+```
+
+### Conformance kit
+
+```java
+@Test
+void conformsToTheEdgeContract() {
+    EdgeAdapterConformance.check(new AcmeDrone(fakeLink), "SN-1").assertPassed();
+}
+```
+
+It checks that every advertised id is executable and every executable id advertised (probing
+unregistered ids, so fake the device side), that schemas parse and that an ASYNCHRONOUS command
+declares its completion event. `checkCommandEvents` / `checkCommandExecutionEvents` check that
+command events carry execution id, asset, state and `occurred_at`.
+
+### Authentication
+
+Both directions of an adapter's gRPC traffic are authenticated (package `com.zqnt.sdk.edge.auth`):
+
+- `EdgeCredentialsClientInterceptor` puts the adapter's edge credential (`ZQNT_EDGE_TOKEN`) on every
+  call into the platform. Issue one in the console (Edge Credentials,
+  `POST /api/admin-console/edge-credentials`) or with `core/scripts/mint-edge-credential.py`. The
+  platform refuses calls without it.
+- `PlatformAuthServerInterceptor` refuses every command not signed by the platform
+  (`ZQNT_PLATFORM_PUBLIC_KEY`, alias `SERVICE_AUTH_PUBLIC_KEY`); without the key it refuses
+  everything. `ZQNT_EDGE_AUTH_DISABLED=true` accepts unauthenticated commands (local SITL only).
+
+`EdgeAuthConfig.fromEnv()` reads all three.
+
+
+## Client SDK
+
 
 > **Java Client Library** for interacting with Zequent Framework Services
 
-## ⚠️ Important: This is a Library, Not a Standalone Application!
+### ⚠️ Important: This is a Library, Not a Standalone Application!
 
 The **Zequent Client SDK** is a **Java library/dependency** that customers add to their applications (Spring Boot, Quarkus, etc.). It is **NOT** a standalone service or application that runs by itself.
 
-## 🏗️ Architecture
+### 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────┐
@@ -30,9 +166,9 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
 └─────────────────────┘  └─────────────────────┘  └─────────────────────┘
 ```
 
-## 🚀 For Customers: How to Use
+### 🚀 For Customers: How to Use
 
-### 1. Add Dependency to Your Project
+#### 1. Add Dependency to Your Project
 
 ```xml
 <dependency>
@@ -42,7 +178,7 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
 </dependency>
 ```
 
-### 2. Get a client credential
+#### 2. Get a client credential
 
 The platform refuses every call that carries no credential. An organization administrator issues
 one in the console under **Deploy → Access & Integrations → Credentials** (kind **client**). It is
@@ -70,7 +206,7 @@ It is sent as `authorization: Bearer <token>` on every call. A refusal surfaces 
 expired/revoked one; `PERMISSION_DENIED` — the call is outside what a client credential may do (an
 asset of another organization, or an administrative RPC). Neither is retried.
 
-#### Local development and deployment: one set of environment variables
+##### Local development and deployment: one set of environment variables
 
 `ZequentClient.fromEnvironment()` (or `builder().fromEnvironment()` to add interceptors or pin one
 service) reads the variables every Zequent client SDK — Java, Python, Go — reads; the Quarkus
@@ -90,7 +226,7 @@ the traffic leaves a private network, and `ZQNT_CLIENT_TOKEN` from its secret st
 committed file. There is deliberately no built-in development credential: the local platform
 refuses anonymous calls just like a deployment does.
 
-#### A credential that is not one fixed token
+##### A credential that is not one fixed token
 
 A service that forwards its own caller's token, or rotates a short-lived one, registers a gRPC
 `ClientInterceptor` instead. It is put on every channel the SDK creates (all four services, unary
@@ -109,9 +245,9 @@ In Quarkus, mark a `ClientInterceptor` bean with `@ZequentClientInterceptor` and
 ClientInterceptor zequentCredentials(MyAuthInterceptor interceptor) { return interceptor; }
 ```
 
-### 3. Setup for Your Framework
+#### 3. Setup for Your Framework
 
-#### 🔹 Quarkus (Automatic via CDI)
+##### 🔹 Quarkus (Automatic via CDI)
 
 **application.properties:**
 ```properties
@@ -146,7 +282,7 @@ public class DroneService {
 }
 ```
 
-### Commands
+#### Commands
 
 Every asset is commanded the same way: list what it can do, then run a command by
 its dotted id with a JSON object of params. There are no typed methods per command.
@@ -197,7 +333,7 @@ try (CommandWatch watch = commands.watchCommand(goTo.getCommandExecutionId(),
 `commands()` uses the remote-control service connection, credential and interceptors already
 configured for the client; nothing else to set up.
 
-### Manual control
+#### Manual control
 
 Stick input goes over one stream per asset. Put the asset in manual control first, then send
 inputs (roll, pitch, yaw, throttle from -1 to 1) at your control rate:
@@ -216,7 +352,7 @@ with a `CommandException` when the platform refuses the session (no adapter reac
 another organization) or the adapter drops it; `send` then throws `IllegalStateException`. Leave
 manual control with `flight.manual.exit`.
 
-### Live data
+#### Live data
 
 ```java
 try (TelemetryWatch watch = zequent.telemetry().watchTelemetry(List.of("DOCK-1"), Duration.ofSeconds(1),
@@ -249,13 +385,13 @@ detections with the stream they came from); `watchAlerts(assetSns, minSeverity, 
 `watchTelemetry`.
 
 **Upgrading from 2.x:** the typed calls of 2.x (`remoteControl()` and `liveData()`) are gone in
-3.0. [MIGRATION.md](MIGRATION.md) maps every typed call to its command id and params.
+3.0. [MIGRATION.md](client/MIGRATION.md) maps every typed call to its command id and params.
 
 **That's it!** The SDK auto-configures via `ZequentClientProducer` (CDI).
 
 ---
 
-#### 🔹 Spring Boot (Simple Bean Configuration)
+##### 🔹 Spring Boot (Simple Bean Configuration)
 
 **Create a Configuration class:**
 ```java
@@ -304,21 +440,21 @@ public ZequentClient zequentClient(
 }
 ```
 
-**See detailed guide:** [`SPRING_BOOT_FINAL.md`](../../../docs/client-sdk/SPRING_BOOT_FINAL.md)
+**See detailed guide:** [`SPRING_BOOT_FINAL.md`](client/../../../docs/client-sdk/SPRING_BOOT_FINAL.md)
 
-## 📚 Customer Documentation
+### 📚 Customer Documentation
 
-### Quick Start Guides
-- **[Spring Boot Integration](../../../docs/client-sdk/SPRING_BOOT_FINAL.md)** - 🔥 **START HERE for Spring Boot** - Simple, defaults-based setup
-- **[Bean Configuration Guide](BEAN_CONFIGURATION.md)** - Advanced configuration options
+#### Quick Start Guides
+- **[Spring Boot Integration](client/../../../docs/client-sdk/SPRING_BOOT_FINAL.md)** - 🔥 **START HERE for Spring Boot** - Simple, defaults-based setup
+- **[Bean Configuration Guide](client/BEAN_CONFIGURATION.md)** - Advanced configuration options
 
-### Reference
-- **[Configuration Reference](CONFIGURATION.md)** - All available properties
-- **[Quick Start Guide](../../../docs/QUICKSTART.md)** - 5-minute setup for any framework
+#### Reference
+- **[Configuration Reference](client/CONFIGURATION.md)** - All available properties
+- **[Quick Start Guide](client/../../../docs/QUICKSTART.md)** - 5-minute setup for any framework
 
-## 🔧 For Developers: Building the SDK
+### 🔧 For Developers: Building the SDK
 
-### Build Library
+#### Build Library
 
 ```bash
 mvn clean install
@@ -326,19 +462,19 @@ mvn clean install
 
 This creates a JAR that customers can add as a dependency.
 
-### Run Tests
+#### Run Tests
 
 ```bash
 mvn test
 ```
 
-### Deploy to Repository
+#### Deploy to Repository
 
 ```bash
 mvn deploy
 ```
 
-## 📦 What's Included
+### 📦 What's Included
 
 This SDK provides:
 - `ZequentClient` - Main client interface
@@ -352,7 +488,7 @@ This SDK provides:
 - Resilience patterns (retry, circuit breaker)
 - Load balancing & service discovery
 
-## ☕ Java Version Compatibility
+### ☕ Java Version Compatibility
 
 - **Compiled with:** Java 21
 - **Compatible with:** Java 21, 22, 23, 24, 25+
@@ -360,7 +496,7 @@ This SDK provides:
 
 The SDK is compiled with Java 21 for maximum customer compatibility. If your application uses Java 21 or higher, the SDK will work seamlessly.
 
-## ✅ Features
+### ✅ Features
 
 ✅ **Framework Agnostic** - Works with Spring Boot, Quarkus, Micronaut, etc.
 ✅ **Sensible Defaults** - Works out-of-the-box (localhost:8002/8004/8003/8010)
@@ -371,7 +507,7 @@ The SDK is compiled with Java 21 for maximum customer compatibility. If your app
 ✅ **Service Discovery** - Stork support for Kubernetes
 ✅ **Simple Integration** - One `@Bean` method for Spring Boot, zero config for Quarkus
 
-## 🚫 What This Is NOT
+### 🚫 What This Is NOT
 
 This SDK does **NOT**:
 - ❌ Run as a standalone application
@@ -379,6 +515,21 @@ This SDK does **NOT**:
 - ❌ Include the actual Zequent services
 - ❌ Need to be "started" or "deployed" separately
 
-## 📝 License
+
+## Moving from the old repositories
+
+This repository replaces `zequent/zqnt-edge-sdk-java` and `zequent/zqnt-client-sdk-java` from 3.0 on;
+their history is kept here under `edge/` and `client/`. The 2.x line stays in the old repositories.
+
+| | Before (2.x) | Now (3.0) |
+|---|---|---|
+| Edge SDK artifact | `com.zqnt.sdk:edge-java-sdk` | unchanged |
+| Client SDK artifact | `com.zqnt.sdk:client-java-sdk` | unchanged |
+| Maven repository | `https://maven.pkg.github.com/Zequent/zqnt-edge-sdk-java`, `.../zqnt-client-sdk-java` | `https://maven.pkg.github.com/Zequent/zqnt-sdk-java` |
+
+Java packages (`com.zqnt.sdk.edge.*`, `com.zqnt.sdk.client.*`) are unchanged: only the repository
+URL and the version change. Moving from the 2.x typed calls to commands: [client/MIGRATION.md](client/MIGRATION.md).
+
+## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE).

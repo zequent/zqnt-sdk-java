@@ -1,50 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.zqnt.sdk</groupId>
+    <parent>
+        <groupId>com.zqnt.sdk</groupId>
+        <artifactId>zqnt-sdk-java</artifactId>
+        <version>3.0.0-SNAPSHOT</version>
+    </parent>
     <artifactId>client-java-sdk</artifactId>
-    <version>3.0.0-SNAPSHOT</version>
     <name>Zequent Java Client SDK</name>
     <description>A framework-agnostic Java client SDK for Zequent's gRPC services, designed for easy integration with any Java application.</description>
-    <url>https://github.com/zequent/zqnt-client-sdk-java</url>
-    
 
-    <licenses>
-        <license>
-            <name>Apache License, Version 2.0</name>
-            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
-            <distribution>repo</distribution>
-        </license>
-    </licenses>
-    
-    <developers>
-        <developer>
-            <name>Zequent Development Team</name>
-            <email>dev@zequent.com</email>
-            <organization>Zequent</organization>
-        </developer>
-    </developers>
-    
-    <scm>
-        <connection>scm:git:https://github.com/zequent/zqnt-client-sdk-java.git</connection>
-        <developerConnection>scm:git:https://github.com/zequent/zqnt-client-sdk-java.git</developerConnection>
-        <url>https://github.com/zequent/zqnt-client-sdk-java</url>
-        <tag>HEAD</tag>
-    </scm>
-    
     <properties>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.release>21</maven.compiler.release>
-        <compiler-plugin.version>3.12.1</compiler-plugin.version>
-        <surefire-plugin.version>3.2.5</surefire-plugin.version>
         <test.excludedGroups>integration</test.excludedGroups>
-        <grpc.version>1.76.0</grpc.version>
-        <protobuf.version>3.25.9</protobuf.version>
         <guava.version>33.4.8-android</guava.version>
-        <slf4j.version>2.0.16</slf4j.version>
         <jackson3.version>3.1.5</jackson3.version>
         <jackson.version>2.21.7</jackson.version>
-        <proguard.version>7.9.1</proguard.version>
     </properties>
 
     <dependencyManagement>
@@ -68,24 +38,7 @@
         </dependencies>
     </dependencyManagement>
 
-    <!-- GitHub Packages Repository -->
-    <repositories>
-        <repository>
-            <id>zqnt-api-repo</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-api-java</url>
-            <releases>
-                <enabled>true</enabled>
-            </releases>
-            <snapshots>
-                <enabled>true</enabled>
-            </snapshots>
-        </repository>
-    </repositories>
-
-
     <dependencies>
-        <!-- Jakarta CDI API (standard annotations, provided by customer's framework) -->
         <dependency>
             <groupId>jakarta.inject</groupId>
             <artifactId>jakarta.inject-api</artifactId>
@@ -98,7 +51,6 @@
             <version>4.0.1</version>
             <scope>provided</scope>
         </dependency>
-        <!-- gRPC - Pure Java, no framework dependencies -->
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-api</artifactId>
@@ -119,7 +71,6 @@
             <artifactId>grpc-stub</artifactId>
             <version>${grpc.version}</version>
         </dependency>
-        <!-- APIs used directly by the SDK source code. -->
         <dependency>
             <groupId>com.google.protobuf</groupId>
             <artifactId>protobuf-java</artifactId>
@@ -136,7 +87,6 @@
             <version>${slf4j.version}</version>
         </dependency>
 
-        <!-- Stork for service discovery (optional, framework-agnostic) -->
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-core</artifactId>
@@ -149,8 +99,6 @@
             <version>3.0.0</version>
             <optional>true</optional>
         </dependency>
-
-        <!-- Smallrye Config (optional, for property binding - framework-agnostic) -->
         <dependency>
             <groupId>io.smallrye.config</groupId>
             <artifactId>smallrye-config</artifactId>
@@ -161,14 +109,12 @@
         <dependency>
             <groupId>com.zqnt</groupId>
             <artifactId>zqnt-api-java</artifactId>
-            <!-- preview (zequent/zqnt-api-java#1); the release version once it is tagged -->
-            <version>3.0.0-PR1-c9a26b2-SNAPSHOT</version>
         </dependency>
-        <!-- Test dependencies (framework-agnostic) -->
+
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>5.10.2</version>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -180,118 +126,43 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.42</version>
+            <version>${lombok.version}</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
 
-
     <build>
         <plugins>
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>${compiler-plugin.version}</version>
                 <configuration>
                     <parameters>true</parameters>
-                    <annotationProcessorPaths>
-                        <path>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                            <version>1.18.42</version>
-
-                        </path>
-                    </annotationProcessorPaths>
                 </configuration>
             </plugin>
-
-            <!-- Test execution (standard JUnit 5) -->
             <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>${surefire-plugin.version}</version>
                 <configuration>
                     <!-- IntelliJ can run integration tests directly; regular Maven builds stay isolated. -->
                     <excludedGroups>${test.excludedGroups}</excludedGroups>
                 </configuration>
             </plugin>
-
             <plugin>
                 <groupId>io.smallrye</groupId>
                 <artifactId>jandex-maven-plugin</artifactId>
-                <version>3.2.2</version>
-                <executions>
-                    <execution>
-                        <id>make-index</id>
-                        <goals>
-                            <goal>jandex</goal>
-                        </goals>
-                    </execution>
-                </executions>
             </plugin>
-
         </plugins>
-
-
     </build>
 
     <profiles>
-        <!-- Customer-facing build: replaces the regular Maven JAR with the obfuscated JAR. -->
         <profile>
             <id>release</id>
             <build>
                 <plugins>
                     <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-enforcer-plugin</artifactId>
-                        <version>3.6.2</version>
-                        <executions>
-                            <execution>
-                                <id>require-release-jdk</id>
-                                <goals>
-                                    <goal>enforce</goal>
-                                </goals>
-                                <configuration>
-                                    <rules>
-                                        <requireJavaVersion>
-                                            <version>[21,22)</version>
-                                            <message>The release profile must run with JDK 21.</message>
-                                        </requireJavaVersion>
-                                    </rules>
-                                </configuration>
-                            </execution>
-                        </executions>
-                    </plugin>
-                    <plugin>
                         <groupId>com.github.wvengen</groupId>
                         <artifactId>proguard-maven-plugin</artifactId>
-                        <version>2.7.0</version>
-                        <dependencies>
-                            <dependency>
-                                <groupId>com.guardsquare</groupId>
-                                <artifactId>proguard-base</artifactId>
-                                <version>${proguard.version}</version>
-                                <scope>runtime</scope>
-                            </dependency>
-                        </dependencies>
-                        <executions>
-                            <execution>
-                                <id>obfuscate-main-artifact</id>
-                                <phase>package</phase>
-                                <goals>
-                                    <goal>proguard</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                        <configuration>
-                            <proguardVersion>${proguard.version}</proguardVersion>
-                            <injar>${project.build.finalName}.jar</injar>
-                            <attach>false</attach>
-                            <attachMap>false</attachMap>
-                            <attachSeed>false</attachSeed>
-                            <libs>
-                                <lib>${java.home}/jmods/java.base.jmod</lib>
-                            </libs>
-                            <proguardInclude>${project.basedir}/proguard-rules.pro</proguardInclude>
-                        </configuration>
                     </plugin>
                 </plugins>
             </build>
@@ -329,19 +200,5 @@
             </build>
         </profile>
     </profiles>
-
-    <!-- Publishing Configuration - GitHub Packages -->
-    <distributionManagement>
-        <repository>
-            <id>zqnt-client-sdk-repo</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
-        </repository>
-        <snapshotRepository>
-            <id>zqnt-client-sdk-repo</id>
-            <name>GitHub Packages</name>
-            <url>https://maven.pkg.github.com/Zequent/zqnt-client-sdk-java</url>
-        </snapshotRepository>
-    </distributionManagement>
 
 </project>
