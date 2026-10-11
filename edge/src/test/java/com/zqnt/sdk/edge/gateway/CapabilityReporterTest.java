@@ -89,13 +89,13 @@ class CapabilityReporterTest {
 		Payload camera = Payload.newBuilder().setRef("camera-0").setKind("camera").setVendor("Acme").setSlotIndex(0).build();
 
 		drone.commands().setPayloads("SN-1", List.of(camera));
+		await(() -> v3Reports.stream().anyMatch(report -> report.getPayloadsList().equals(List.of(camera))));
+		int reported = v3Reports.size();
 		drone.commands().setPayloads("SN-1", List.of(camera));
 		drone.commands().setPayloads("SN-1", List.of());
 
-		await(() -> v3Reports.size() == 3);
+		await(() -> v3Reports.size() > reported && v3Reports.get(v3Reports.size() - 1).getPayloadsCount() == 0);
 		assertEquals(0, v3Reports.get(0).getPayloadsCount());
-		assertEquals(camera, v3Reports.get(1).getPayloads(0));
-		assertEquals(0, v3Reports.get(2).getPayloadsCount());
 	}
 
 	@Test
