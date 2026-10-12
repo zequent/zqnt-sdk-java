@@ -12,9 +12,9 @@
 
     <properties>
         <test.excludedGroups>integration</test.excludedGroups>
-        <guava.version>33.4.8-android</guava.version>
-        <jackson3.version>3.1.5</jackson3.version>
-        <jackson.version>2.21.7</jackson.version>
+        <guava.version>33.7.2-android</guava.version>
+        <jackson3.version>3.2.3</jackson3.version>
+        <jackson.version>2.22.3</jackson.version>
     </properties>
 
     <dependencyManagement>
@@ -90,13 +90,13 @@
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-core</artifactId>
-            <version>3.0.0</version>
+            <version>3.0.3</version>
             <optional>true</optional>
         </dependency>
         <dependency>
             <groupId>io.smallrye.stork</groupId>
             <artifactId>stork-service-discovery-kubernetes</artifactId>
-            <version>3.0.0</version>
+            <version>3.0.3</version>
             <optional>true</optional>
         </dependency>
         <dependency>
@@ -176,7 +176,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-source-plugin</artifactId>
-                        <version>3.3.1</version>
+                        <version>3.4.0</version>
                         <executions>
                             <execution>
                                 <id>attach-sources</id>
@@ -187,7 +187,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-javadoc-plugin</artifactId>
-                        <version>3.11.2</version>
+                        <version>3.12.0</version>
                         <configuration><doclint>none</doclint></configuration>
                         <executions>
                             <execution>
