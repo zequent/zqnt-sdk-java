@@ -16,6 +16,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      - dependency-name: "com.google.protobuf:*"
+        versions: [">= 4.36"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
