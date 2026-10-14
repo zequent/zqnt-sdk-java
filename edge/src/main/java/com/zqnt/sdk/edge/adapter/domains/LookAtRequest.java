@@ -22,4 +22,6 @@ public class LookAtRequest {
     private Boolean locked;
 
     private String payloadIndex;
+
+    private String externalId;
 }

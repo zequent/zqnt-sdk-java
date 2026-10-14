@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
  *   <li>every advertised id is executable: registered, or executing it with a minimal value of its
  *   input schema is not refused as unsupported (nor as invalid by its own schema);</li>
  *   <li>every executable id is advertised: every registered id, and every built-in id the adapter
- *   implements typed ({@link Options#probeBuiltIns()});</li>
+ *   implements typed ({@link Options#probeBuiltIns()}), which v3 refuses while it is unadvertised;</li>
  *   <li>input and output schemas parse; an ASYNCHRONOUS command names a completion event it declares;</li>
  *   <li>every payload has a unique ref, and a command targeting a payload names a reported one;</li>
  *   <li>{@link #checkCommandEvents}: every command event carries its execution id, asset, state and
@@ -144,10 +144,7 @@ public final class EdgeAdapterConformance {
 		if (options.probeBuiltIns()) {
 			for (String id : BuiltInCommandDispatch.builtInIds()) {
 				if (advertised.contains(id) || (registry != null && registry.contains(id))) continue;
-				CommandResult result = probe(service, sn, id, Map.of(), options, problems);
-				boolean unsupported = result == null || (result.getState() == CommandState.COMMAND_STATE_REJECTED
-						&& CommandRegistry.NOT_SUPPORTED.equals(result.getError().getCode()));
-				if (!unsupported) problems.add(id + " is executable but not advertised");
+				if (typedImplementation(adapter, sn, id, options, problems)) problems.add(id + " is executable but not advertised");
 			}
 		}
 		return new ConformanceReport(problems);
@@ -220,6 +217,18 @@ public final class EdgeAdapterConformance {
 		} catch (Exception e) {
 			problems.add(id + " could not be executed: " + message(e));
 			return null;
+		}
+	}
+
+	/** Whether the adapter runs {@code id} through its typed method, which a 2.x platform reaches but v3 never runs unadvertised. */
+	private static boolean typedImplementation(EdgeAdapterService adapter, String sn, String id, Options options,
+			List<String> problems) {
+		try {
+			var result = BuiltInCommandDispatch.dispatch(adapter, sn, id, Map.of());
+			return result.isPresent() && !result.get().get(options.timeout().toMillis(), TimeUnit.MILLISECONDS).isNotImplemented();
+		} catch (Exception e) {
+			problems.add(id + " could not be executed: " + message(e));
+			return false;
 		}
 	}
 

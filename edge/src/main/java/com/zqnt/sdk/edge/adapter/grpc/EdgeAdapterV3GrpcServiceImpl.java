@@ -42,12 +42,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * The v3 edge contract ({@code zqnt.edge.v3.EdgeAdapterService}), served next to the v2
  * {@link EdgeAdapterGrpcServiceImpl} from the same {@link EdgeAdapterService}.
  *
- * <p>v3 has no per-command RPCs: every command is an {@code ExecuteCommand} with a dotted id. An id
- * in the adapter's {@link CommandRegistry} runs its registered handler. Otherwise it runs through
- * the adapter's own {@link EdgeAdapterService#sendCustomCommand} first and, when the adapter does not
- * place it there but implements it typed ({@code flight.takeoff} on {@code takeOff}, …), through
- * {@link BuiltInCommandDispatch}. Params are validated against the command's input schema before
- * anything runs; invalid params are REJECTED with {@code command.invalid_params}.
+ * <p>v3 has no per-command RPCs: every command is an {@code ExecuteCommand} with a dotted id, and
+ * only a published id runs. An adapter with a {@link CommandRegistry} runs the registered handler; an
+ * adapter without one runs an id it advertises in {@code GetCapabilities} through its own
+ * {@link EdgeAdapterService#sendCustomCommand} first and, when it does not place it there but
+ * implements it typed ({@code flight.takeoff} on {@code takeOff}, …), through
+ * {@link BuiltInCommandDispatch}. Any other id is REJECTED with {@code command.not_supported} before
+ * adapter code runs. Params are validated as sent against the command's input schema; invalid params
+ * are REJECTED with {@code command.invalid_params}.
  *
  * <p>An ACCEPTED command is remembered under the platform's {@code command_execution_id}, so the
  * adapter's later progress events (reported with its own execution id) reach the platform as v3
@@ -123,22 +125,24 @@ public class EdgeAdapterV3GrpcServiceImpl extends EdgeAdapterServiceGrpc.EdgeAda
 				});
 	}
 
-	/** The registry when it has the id; else the adapter's own routing, then the built-in ids it implements typed. */
+	/** The registry when the adapter has one; else, for an advertised id, its own routing, then the built-in ids it implements typed. */
 	CompletableFuture<com.zqnt.sdk.edge.adapter.domains.CommandResult> execute(CommandRequest request) {
-		Optional<CommandRegistry> registry = edgeAdapterService.commandRegistry()
-				.filter(candidate -> candidate.contains(request.commandId()));
+		Optional<CommandRegistry> registry = edgeAdapterService.commandRegistry();
 		if (registry.isPresent()) {
 			return registry.get().execute(request);
 		}
 		return capabilityFor(request.sn(), request.commandId()).thenCompose(capability -> {
-			CommandSchemas.Validation validation = CommandSchemas.validate(
-					capability.map(com.zqnt.sdk.edge.adapter.domains.Capability::getInputSchema).orElse(null), request.params());
+			if (capability.isEmpty()) {
+				return CompletableFuture.completedFuture(com.zqnt.sdk.edge.adapter.domains.CommandResult.notImplemented(
+						request.commandId() + " is not supported by this adapter", request.sn()));
+			}
+			CommandSchemas.Validation validation = CommandSchemas.validate(capability.get().getInputSchema(), request.params());
 			if (!validation.valid()) {
 				return CompletableFuture.completedFuture(com.zqnt.sdk.edge.adapter.domains.CommandResult.rejected(
 						CommandRegistry.INVALID_PARAMS, request.commandId() + ": " + validation.message(), request.sn()));
 			}
 			Map<String, Object> params = validation.params();
-			return edgeAdapterService.sendCustomCommand(request.sn(), request.targetRef(), request.commandId(), params)
+			return edgeAdapterService.sendCustomCommand(request.withParams(params))
 					.thenCompose(result -> {
 						if (!result.isNotImplemented()) {
 							return CompletableFuture.completedFuture(result);
