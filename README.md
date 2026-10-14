@@ -70,11 +70,19 @@ public class AcmeDrone extends RegistryEdgeAdapter {
   spotlight, ...); they go out with the v3 capabilities as a full snapshot, so a payload left out is
   detached. A command acting on one targets it with `CAPABILITY_TARGET_TYPE_PAYLOAD` and the payload's ref.
 - `GetCapabilities` (v2 and v3) is derived from the registry only. v2 typed RPCs (`takeOff`, ...),
-  v2 `SendCustomCommand` and v3 `ExecuteCommand` all run the same handler. The typed methods of
-  `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
+  v2 `SendCustomCommand` and v3 `ExecuteCommand` all run the same handler, and the handler's
+  `CommandRequest.commandExecutionId()` is the platform's run id on both (v3 `command_execution_id`,
+  v2 `external_id` of `SendCustomCommand`, `takeOff`, `goTo`, `returnToHome` and `lookAt`). The typed
+  methods of `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
+- v3 runs only published commands: an id that is not registered (or, without a registry, not
+  advertised) is REJECTED with `command.not_supported` before any adapter code runs. A free-form
+  command is reachable only from a 2.x platform's `SendCustomCommand`, through
+  `legacyCustomCommand(CommandRequest)`, which refuses unless the adapter overrides it.
 - Params are validated against the input schema before the handler runs, and numbers are converted
   to `Integer`/`Long` where the schema says `integer`. Invalid params are REJECTED with error code
-  `command.invalid_params` and a readable message; an unknown id with `command.not_supported`.
+  `command.invalid_params` and a readable message. v3 params are validated as sent; on v2 the bridge
+  first converts text the schema does not accept as text (`"13.405"` for a number, `"true"` for a
+  boolean, `"pitch_down"` for the enum value `PITCH_DOWN`), exact conversions only.
 - **Risk:** every capability carries a `CommandSafety`. A standard id gets the rating of the
   platform's command catalog (`CommandCatalog`, e.g. `flight.takeoff` MOVE, `flight.land` CRITICAL,
   `camera.take_photo` OBSERVE); `capability.setSafety(...)` overrides it. A `vendor.*` command that

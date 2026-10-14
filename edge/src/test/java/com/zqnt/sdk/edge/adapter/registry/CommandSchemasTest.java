@@ -113,4 +113,48 @@ class CommandSchemasTest {
 		assertTrue(CommandSchemas.validate(GO_TO, sample).valid(), sample.toString());
 		assertEquals(Map.of("latitude", -90.0, "longitude", -180.0), sample);
 	}
+
+	private static final Map<String, Object> PANEL = Map.of(
+			"type", "object",
+			"properties", Map.of(
+					"latitude", Map.of("type", "number"),
+					"speed", Map.of("type", "integer"),
+					"locked", Map.of("type", "boolean"),
+					"mode", Map.of("type", "string", "enum", List.of("FAST", "SAFE")),
+					"zone", Map.of("type", "string"),
+					"waypoints", Map.of("type", "array", "items", Map.of("type", "object",
+							"properties", Map.of("altitude", Map.of("type", "number"))))));
+
+	@Test
+	void textBecomesTheNumberBooleanOrEnumValueTheSchemaAsksFor() {
+		var converted = CommandSchemas.fromText(PANEL, Map.of("latitude", " 52.5200 ", "speed", "13",
+				"locked", "TRUE", "mode", "safe", "waypoints", List.of(Map.of("altitude", "-1.5e1"))));
+
+		assertEquals(52.52, converted.get("latitude"));
+		assertEquals(13, converted.get("speed"));
+		assertEquals(true, converted.get("locked"));
+		assertEquals("SAFE", converted.get("mode"));
+		assertEquals(List.of(Map.of("altitude", -15.0)), converted.get("waypoints"));
+		assertTrue(CommandSchemas.validate(PANEL, converted).valid());
+	}
+
+	@Test
+	void textStaysTextWhereTheSchemaAllowsText() {
+		var converted = CommandSchemas.fromText(PANEL, Map.of("zone", "0123", "unknown", "42"));
+
+		assertEquals(Map.of("zone", "0123", "unknown", "42"), converted);
+	}
+
+	@Test
+	void onlyExactConversionsHappenAndTheRestIsLeftForValidation() {
+		for (String text : List.of("NaN", "Infinity", "1d", "0x1p3", "", "warm")) {
+			var converted = CommandSchemas.fromText(PANEL, Map.of("latitude", text));
+
+			assertEquals(text, converted.get("latitude"), text);
+			assertFalse(CommandSchemas.validate(PANEL, converted).valid(), text);
+		}
+		assertEquals("1.5", CommandSchemas.fromText(PANEL, Map.of("speed", "1.5")).get("speed"));
+		assertEquals("1", CommandSchemas.fromText(PANEL, Map.of("locked", "1")).get("locked"));
+		assertEquals("SLOW", CommandSchemas.fromText(PANEL, Map.of("mode", "SLOW")).get("mode"));
+	}
 }
