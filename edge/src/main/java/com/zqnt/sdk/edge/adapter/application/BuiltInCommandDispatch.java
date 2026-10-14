@@ -51,7 +51,7 @@ public final class BuiltInCommandDispatch {
 	public static Optional<CompletableFuture<CommandResult>> dispatch(
 			EdgeAdapterService adapter, String sn, String commandType, Map<String, Object> params, String commandExecutionId) {
 		Map<String, Object> safeParams = params == null ? Map.of() : params;
-		return Optional.ofNullable(switch (commandType) {
+		return Optional.ofNullable(switch (typedMethodId(commandType)) {
 			case "flight.takeoff" -> adapter.takeOff(TakeOffRequest.builder()
 					.sn(sn)
 					.coordinates(coordinates(safeParams))
@@ -75,7 +75,7 @@ public final class BuiltInCommandDispatch {
 					.payloadIndex(stringValue(safeParams, "payloadIndex"))
 					.build());
 			case "gimbal.tracking" -> adapter.enableGimbalTracking(sn, Boolean.TRUE.equals(boolValue(safeParams, "enabled")));
-			case "camera.take_photo", "camera.capture_photo" -> adapter.takePhoto(TakePhotoRequest.builder().sn(sn).build());
+			case "camera.take_photo" -> adapter.takePhoto(TakePhotoRequest.builder().sn(sn).build());
 			case "camera.change_lens" -> adapter.changeLens(ChangeLensRequest.builder()
 					.sn(sn)
 					.lens(stringValue(safeParams, "lens"))
@@ -130,6 +130,13 @@ public final class BuiltInCommandDispatch {
 	public static java.util.Set<String> builtInIds() {
 		return BUILT_IN_IDS;
 	}
+
+	/** The id {@code commandType} shares its typed method with: itself, or the id it is an alias of. */
+	public static String typedMethodId(String commandType) {
+		return ALIASES.getOrDefault(commandType, commandType);
+	}
+
+	private static final Map<String, String> ALIASES = Map.of("camera.capture_photo", "camera.take_photo");
 
 	private static final java.util.Set<String> BUILT_IN_IDS = java.util.Set.of(
 			"flight.takeoff", "navigation.go_to", "flight.return_to_home",
