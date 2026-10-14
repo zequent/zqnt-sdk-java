@@ -40,7 +40,7 @@ import java.util.concurrent.TimeUnit;
  * contract the platform relies on.
  *
  * <ul>
- *   <li>every advertised id is executable: registered, or executing it with a minimal value of its
+ *   <li>every advertised, available id is executable: registered, or executing it with a minimal value of its
  *   input schema is not refused as unsupported (nor as invalid by its own schema);</li>
  *   <li>every executable id is advertised: every registered id, and every built-in id the adapter
  *   implements typed ({@link Options#probeBuiltIns()}), which v3 refuses while it is unadvertised;</li>
@@ -123,7 +123,7 @@ public final class EdgeAdapterConformance {
 			if (registry != null && registry.contains(id)) {
 				continue;
 			}
-			if (options.probeAdvertised()) {
+			if (options.probeAdvertised() && capability.getState() == com.zqnt.protos.capability.v3.CapabilityState.CAPABILITY_STATE_AVAILABLE) {
 				Map<String, Object> sample = sampleParams(capability);
 				CommandResult result = probe(service, sn, id, sample, options, problems);
 				if (result != null && result.getState() == CommandState.COMMAND_STATE_REJECTED) {

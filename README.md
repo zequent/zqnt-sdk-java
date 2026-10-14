@@ -74,15 +74,19 @@ public class AcmeDrone extends RegistryEdgeAdapter {
   `CommandRequest.commandExecutionId()` is the platform's run id on both (v3 `command_execution_id`,
   v2 `external_id` of `SendCustomCommand`, `takeOff`, `goTo`, `returnToHome` and `lookAt`). The typed
   methods of `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
-- v3 runs only published commands: an id that is not registered (or, without a registry, not
-  advertised) is REJECTED with `command.not_supported` before any adapter code runs. A free-form
-  command is reachable only from a 2.x platform's `SendCustomCommand`, through
+- v3 runs only published commands: an id that is not registered is REJECTED with
+  `command.not_supported` before any adapter code runs. An adapter without a registry runs only the
+  built-in ids it advertises as available (`BuiltInCommandDispatch.builtInIds()`), on their typed
+  methods; its vendor ids never reach `sendCustomCommand` over v3. A free-form command is reachable
+  only from a 2.x platform's `SendCustomCommand`: on a registry adapter through
   `legacyCustomCommand(CommandRequest)`, which refuses unless the adapter overrides it.
 - Params are validated against the input schema before the handler runs, and numbers are converted
   to `Integer`/`Long` where the schema says `integer`. Invalid params are REJECTED with error code
   `command.invalid_params` and a readable message. v3 params are validated as sent; on v2 the bridge
   first converts text the schema does not accept as text (`"13.405"` for a number, `"true"` for a
-  boolean, `"pitch_down"` for the enum value `PITCH_DOWN`), exact conversions only.
+  boolean, `"pitch_down"` for the enum value `PITCH_DOWN`), exact conversions only. Enum aliases
+  (a DJI name such as `SDR_ONLY` or `IRONBOW1` for a standard value) are not converted: a 2.x
+  platform must send the standard value.
 - **Risk:** every capability carries a `CommandSafety`. A standard id gets the rating of the
   platform's command catalog (`CommandCatalog`, e.g. `flight.takeoff` MOVE, `flight.land` CRITICAL,
   `camera.take_photo` OBSERVE); `capability.setSafety(...)` overrides it. A `vendor.*` command that
