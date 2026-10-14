@@ -11,8 +11,11 @@ import com.zqnt.protos.edge.v3.CancelCommandResponse;
 import com.zqnt.protos.edge.v3.ExecuteCommandRequest;
 import com.zqnt.protos.edge.v3.ExecuteCommandResponse;
 import com.zqnt.sdk.edge.adapter.application.EdgeAdapterService;
+import com.zqnt.sdk.edge.adapter.domains.ChangeZoomRequest;
 import com.zqnt.sdk.edge.adapter.domains.CommandResult;
+import com.zqnt.sdk.edge.adapter.domains.GoToRequest;
 import com.zqnt.sdk.edge.adapter.domains.TakeOffRequest;
+import com.zqnt.utils.devicecontrol.proto.CapabilityState;
 import io.grpc.stub.StreamObserver;
 import org.junit.jupiter.api.Test;
 
@@ -24,25 +27,30 @@ import java.util.concurrent.CompletableFuture;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * v3 has no per-command RPCs. An adapter written for v2 -- typed {@code takeOff}, its own
- * {@code sendCustomCommand} for vendor ids -- must answer v3 {@code ExecuteCommand} unchanged for
- * every id it advertises, and any other id is REJECTED before it reaches the adapter, never an
- * aborted call.
+ * v3 has no per-command RPCs. An adapter written for v2 without a registry -- typed {@code takeOff},
+ * its own {@code sendCustomCommand} for vendor ids -- answers v3 {@code ExecuteCommand} for every
+ * built-in id it advertises as available, on its typed method. Any other id, an advertised vendor id
+ * included, is REJECTED before it reaches the adapter, never an aborted call.
  */
 class EdgeAdapterV3GrpcServiceImplTest {
 
 	private static final class Adapter implements EdgeAdapterService {
 		final List<TakeOffRequest> takeoffs = new ArrayList<>();
-		final List<Map<String, Object>> sprays = new ArrayList<>();
+		final List<String> closed = new ArrayList<>();
+		final List<String[]> startedTasks = new ArrayList<>();
 		final List<String> cancelled = new ArrayList<>();
 		final List<String> custom = new ArrayList<>();
 
 		@Override
 		public CompletableFuture<com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities> getCapabilities(String sn) {
 			java.util.Set<com.zqnt.sdk.edge.adapter.domains.Capability> advertised = new java.util.LinkedHashSet<>();
-			for (String id : List.of("flight.takeoff", "vendor.acme.spray", "mission.waypoint.execute", "vendor.acme.broken")) {
+			for (String id : List.of("flight.takeoff", "navigation.go_to", "dock.open_cover", "dock.close_cover",
+					"mission.start", "vendor.acme.spray", "mission.waypoint.execute")) {
 				var capability = new com.zqnt.sdk.edge.adapter.domains.Capability();
 				capability.setCommand(id);
+				if (id.equals("dock.close_cover")) {
+					capability.setState(CapabilityState.CAPABILITY_STATE_TEMPORARILY_UNAVAILABLE);
+				}
 				advertised.add(capability);
 			}
 			return CompletableFuture.completedFuture(new com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities(
@@ -56,20 +64,32 @@ class EdgeAdapterV3GrpcServiceImplTest {
 		}
 
 		@Override
+		public CompletableFuture<CommandResult> goTo(GoToRequest request) {
+			return CompletableFuture.completedFuture(CommandResult.accepted("flying", "dji-77", request.getSn()));
+		}
+
+		@Override
+		public CompletableFuture<CommandResult> openCover(String sn) {
+			return CompletableFuture.completedFuture(CommandResult.error("cover jammed", sn));
+		}
+
+		@Override
+		public CompletableFuture<CommandResult> closeCover(String sn, Boolean force) {
+			closed.add(sn);
+			return CompletableFuture.completedFuture(CommandResult.success("closed", sn));
+		}
+
+		@Override
+		public CompletableFuture<CommandResult> startTask(String taskId, String tid) {
+			startedTasks.add(new String[]{taskId, tid});
+			return CompletableFuture.completedFuture(CommandResult.success("started", "SN-1"));
+		}
+
+		@Override
 		public CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
 				Map<String, Object> params) {
 			custom.add(commandType);
-			return switch (commandType) {
-				case "vendor.acme.spray" -> {
-					sprays.add(params);
-					yield CompletableFuture.completedFuture(CommandResult.success("sprayed", sn));
-				}
-				case "mission.waypoint.execute" ->
-						CompletableFuture.completedFuture(CommandResult.accepted("flying", "dji-77", sn));
-				case "vendor.acme.broken" -> CompletableFuture.completedFuture(CommandResult.error("nozzle blocked", sn));
-				case "vendor.acme.hidden" -> CompletableFuture.completedFuture(CommandResult.success("done", sn));
-				default -> CompletableFuture.completedFuture(CommandResult.notImplemented("unknown " + commandType, sn));
-			};
+			return CompletableFuture.completedFuture(CommandResult.success("done", sn));
 		}
 
 		@Override
@@ -117,23 +137,48 @@ class EdgeAdapterV3GrpcServiceImplTest {
 	}
 
 	@Test
-	void theAdaptersOwnRoutingRunsAVendorCommand() {
+	void anAdvertisedVendorIdIsRejectedAndNeverReachesTheAdapter() {
 		Adapter adapter = new Adapter();
-		var response = execute(adapter, "vendor.acme.spray", Map.of("seconds", 3));
 
-		assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, response.getResult().getState());
-		assertEquals("cx-1", response.getResult().getCommandExecutionId());
-		assertEquals(3.0, ((Number) adapter.sprays.get(0).get("seconds")).doubleValue());
+		var spray = execute(adapter, "vendor.acme.spray", Map.of("seconds", 3));
+		var waypoints = execute(adapter, "mission.waypoint.execute", Map.of());
+
+		for (var response : List.of(spray, waypoints)) {
+			assertEquals(CommandState.COMMAND_STATE_REJECTED, response.getResult().getState());
+			assertEquals(com.zqnt.sdk.edge.adapter.registry.CommandRegistry.NOT_SUPPORTED, response.getResult().getError().getCode());
+		}
+		assertTrue(adapter.custom.isEmpty());
 	}
 
 	@Test
-	void aBuiltInIdReachesTheTypedMethodWhenTheAdapterDoesNotPlaceIt() {
+	void anAdvertisedBuiltInIdRunsOnItsTypedMethod() {
 		Adapter adapter = new Adapter();
 		var response = execute(adapter, "flight.takeoff", Map.of("latitude", 52.5, "longitude", 13.4, "altitude", 40));
 
 		assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, response.getResult().getState());
+		assertEquals("cx-1", response.getResult().getCommandExecutionId());
 		assertEquals(1, adapter.takeoffs.size());
 		assertEquals("SN-1", adapter.takeoffs.get(0).getSn());
+		assertTrue(adapter.custom.isEmpty());
+	}
+
+	@Test
+	void aMissionCommandStartsTheTaskUnderThePlatformsRunId() {
+		Adapter adapter = new Adapter();
+		var response = execute(adapter, "mission.start", Map.of("taskId", "task-4"));
+
+		assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, response.getResult().getState());
+		assertArrayEquals(new String[]{"task-4", "cx-1"}, adapter.startedTasks.get(0));
+	}
+
+	@Test
+	void anAdvertisedBuiltInThatIsUnavailableIsRejected() {
+		Adapter adapter = new Adapter();
+		var response = execute(adapter, "dock.close_cover", Map.of());
+
+		assertEquals(CommandState.COMMAND_STATE_REJECTED, response.getResult().getState());
+		assertEquals(com.zqnt.sdk.edge.adapter.registry.CommandRegistry.NOT_SUPPORTED, response.getResult().getError().getCode());
+		assertTrue(adapter.closed.isEmpty());
 	}
 
 	@Test
@@ -149,14 +194,14 @@ class EdgeAdapterV3GrpcServiceImplTest {
 	void anIdTheAdapterWouldRunButDoesNotAdvertiseNeverReachesIt() {
 		Adapter adapter = new Adapter();
 
-		var response = execute(adapter, "vendor.acme.hidden", Map.of());
+		var response = execute(adapter, "flight.return_to_home", Map.of());
 
 		assertEquals(CommandState.COMMAND_STATE_REJECTED, response.getResult().getState());
 		assertEquals(com.zqnt.sdk.edge.adapter.registry.CommandRegistry.NOT_SUPPORTED, response.getResult().getError().getCode());
 		assertTrue(adapter.custom.isEmpty());
 	}
 
-	/** An adapter that declares take-off ASYNCHRONOUS: its typed takeOff answers a plain success. */
+	/** Declares take-off ASYNCHRONOUS and the cover ON_REPLY: both typed methods answer a plain success. */
 	private static final class DeclaringAdapter implements EdgeAdapterService {
 		@Override
 		public CompletableFuture<CommandResult> takeOff(TakeOffRequest request) {
@@ -169,19 +214,16 @@ class EdgeAdapterV3GrpcServiceImplTest {
 			takeoff.setCommand("flight.takeoff");
 			takeoff.setCompletion(com.zqnt.protos.capability.v3.CompletionMode.COMPLETION_MODE_ASYNCHRONOUS);
 			takeoff.setCompletionEvent("flight.takeoff.completed");
-			var light = new com.zqnt.sdk.edge.adapter.domains.Capability();
-			light.setCommand("dock.light");
-			light.setCompletion(com.zqnt.protos.capability.v3.CompletionMode.COMPLETION_MODE_ON_REPLY);
+			var cover = new com.zqnt.sdk.edge.adapter.domains.Capability();
+			cover.setCommand("dock.open_cover");
+			cover.setCompletion(com.zqnt.protos.capability.v3.CompletionMode.COMPLETION_MODE_ON_REPLY);
 			return CompletableFuture.completedFuture(new com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities(
-					sn, null, java.util.Set.of(takeoff, light), System.currentTimeMillis()));
+					sn, null, java.util.Set.of(takeoff, cover), System.currentTimeMillis()));
 		}
 
 		@Override
-		public CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
-				Map<String, Object> params) {
-			return "dock.light".equals(commandType)
-					? CompletableFuture.completedFuture(CommandResult.success("on", sn))
-					: CompletableFuture.completedFuture(CommandResult.notImplemented("unknown " + commandType, sn));
+		public CompletableFuture<CommandResult> openCover(String sn) {
+			return CompletableFuture.completedFuture(CommandResult.success("open", sn));
 		}
 	}
 
@@ -196,7 +238,7 @@ class EdgeAdapterV3GrpcServiceImplTest {
 
 	@Test
 	void aDeclaredOnReplyCommandIsDoneOnItsReply() {
-		var response = execute(new DeclaringAdapter(), "dock.light", Map.of("on", "true"));
+		var response = execute(new DeclaringAdapter(), "dock.open_cover", Map.of());
 
 		assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, response.getResult().getState());
 	}
@@ -218,7 +260,7 @@ class EdgeAdapterV3GrpcServiceImplTest {
 
 	@Test
 	void aLongCommandIsAcceptedUnderItsExternalId() {
-		var response = execute(new Adapter(), "mission.waypoint.execute", Map.of());
+		var response = execute(new Adapter(), "navigation.go_to", Map.of("latitude", 52.5, "longitude", 13.4));
 
 		assertEquals(CommandState.COMMAND_STATE_ACCEPTED, response.getResult().getState());
 		assertEquals("dji-77", response.getResult().getResult().getFieldsOrThrow("external_execution_id").getStringValue());
@@ -226,10 +268,10 @@ class EdgeAdapterV3GrpcServiceImplTest {
 
 	@Test
 	void anAdapterFailureIsFailedWithItsMessage() {
-		var response = execute(new Adapter(), "vendor.acme.broken", Map.of());
+		var response = execute(new Adapter(), "dock.open_cover", Map.of());
 
 		assertEquals(CommandState.COMMAND_STATE_FAILED, response.getResult().getState());
-		assertEquals("nozzle blocked", response.getResult().getError().getMessage());
+		assertEquals("cover jammed", response.getResult().getError().getMessage());
 	}
 
 	@Test
@@ -244,7 +286,7 @@ class EdgeAdapterV3GrpcServiceImplTest {
 	}
 
 	private static final class SchemaAdapter implements EdgeAdapterService {
-		final List<Map<String, Object>> zooms = new ArrayList<>();
+		final List<Float> zooms = new ArrayList<>();
 
 		@Override
 		public CompletableFuture<com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities> getCapabilities(String sn) {
@@ -257,10 +299,9 @@ class EdgeAdapterV3GrpcServiceImplTest {
 		}
 
 		@Override
-		public CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
-				Map<String, Object> params) {
-			zooms.add(params);
-			return CompletableFuture.completedFuture(CommandResult.success("zoomed", sn));
+		public CompletableFuture<CommandResult> changeZoom(ChangeZoomRequest request) {
+			zooms.add(request.getZoom());
+			return CompletableFuture.completedFuture(CommandResult.success("zoomed", request.getSn()));
 		}
 	}
 
@@ -274,7 +315,7 @@ class EdgeAdapterV3GrpcServiceImplTest {
 		assertEquals(CommandState.COMMAND_STATE_REJECTED, rejected.getResult().getState());
 		assertEquals("command.invalid_params", rejected.getResult().getError().getCode());
 		assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, accepted.getResult().getState());
-		assertEquals(List.of(Map.of("zoom", 4)), adapter.zooms);
+		assertEquals(List.of(4.0f), adapter.zooms);
 	}
 
 	@Test
@@ -283,14 +324,14 @@ class EdgeAdapterV3GrpcServiceImplTest {
 		var executions = new com.zqnt.sdk.edge.gateway.CommandExecutions(java.time.Duration.ofMinutes(5));
 		var service = new EdgeAdapterV3GrpcServiceImpl(adapter, executions);
 		Capture<ExecuteCommandResponse> accepted = new Capture<>();
-		service.executeCommand(request("mission.waypoint.execute", Map.of()).toBuilder()
+		service.executeCommand(request("navigation.go_to", Map.of("latitude", 52.5, "longitude", 13.4)).toBuilder()
 				.setCommandExecutionId("capexec:run-9:node-2").build(), accepted);
 
 		Capture<CancelCommandResponse> cancelled = new Capture<>();
 		service.cancelCommand(CancelCommandRequest.newBuilder().setCommandExecutionId("capexec:run-9:node-2").build(), cancelled);
 
 		assertEquals(CommandState.COMMAND_STATE_CANCELLED, cancelled.value.getResult().getState());
-		assertEquals("mission.waypoint.execute", cancelled.value.getResult().getCommandId());
+		assertEquals("navigation.go_to", cancelled.value.getResult().getCommandId());
 		assertEquals(List.of("dji-77"), adapter.cancelled);
 		assertTrue(executions.get("capexec:run-9:node-2").isEmpty());
 	}

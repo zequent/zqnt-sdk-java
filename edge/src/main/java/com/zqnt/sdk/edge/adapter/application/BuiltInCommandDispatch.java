@@ -44,6 +44,12 @@ public final class BuiltInCommandDispatch {
 	 */
 	public static Optional<CompletableFuture<CommandResult>> dispatch(
 			EdgeAdapterService adapter, String sn, String commandType, Map<String, Object> params) {
+		return dispatch(adapter, sn, commandType, params, null);
+	}
+
+	/** As {@link #dispatch(EdgeAdapterService, String, String, Map)}, with the platform's run id as the tid of a mission command. */
+	public static Optional<CompletableFuture<CommandResult>> dispatch(
+			EdgeAdapterService adapter, String sn, String commandType, Map<String, Object> params, String commandExecutionId) {
 		Map<String, Object> safeParams = params == null ? Map.of() : params;
 		return Optional.ofNullable(switch (commandType) {
 			case "flight.takeoff" -> adapter.takeOff(TakeOffRequest.builder()
@@ -69,7 +75,7 @@ public final class BuiltInCommandDispatch {
 					.payloadIndex(stringValue(safeParams, "payloadIndex"))
 					.build());
 			case "gimbal.tracking" -> adapter.enableGimbalTracking(sn, Boolean.TRUE.equals(boolValue(safeParams, "enabled")));
-			case "camera.take_photo" -> adapter.takePhoto(TakePhotoRequest.builder().sn(sn).build());
+			case "camera.take_photo", "camera.capture_photo" -> adapter.takePhoto(TakePhotoRequest.builder().sn(sn).build());
 			case "camera.change_lens" -> adapter.changeLens(ChangeLensRequest.builder()
 					.sn(sn)
 					.lens(stringValue(safeParams, "lens"))
@@ -106,6 +112,11 @@ public final class BuiltInCommandDispatch {
 					? adapter.enterRemoteDebugMode(sn)
 					: adapter.closeRemoteDebugMode(sn);
 			case "asset.change_ac_mode" -> adapter.changeAcMode(sn, stringValue(safeParams, "mode"));
+			case "mission.prepare" -> adapter.prepareTask(stringValue(safeParams, "taskId"), commandExecutionId);
+			case "mission.start" -> adapter.startTask(stringValue(safeParams, "taskId"), commandExecutionId);
+			case "mission.stop" -> adapter.stopTask(stringValue(safeParams, "taskId"));
+			case "mission.pause" -> adapter.pauseTask(stringValue(safeParams, "taskId"));
+			case "mission.resume" -> adapter.resumeTask(stringValue(safeParams, "taskId"));
 			default -> null;
 		});
 	}
@@ -124,10 +135,11 @@ public final class BuiltInCommandDispatch {
 			"flight.takeoff", "navigation.go_to", "flight.return_to_home",
 			"flight.manual.enter", "flight.manual.exit",
 			"gimbal.look_at", "gimbal.tracking",
-			"camera.take_photo", "camera.change_lens", "camera.change_zoom",
+			"camera.take_photo", "camera.capture_photo", "camera.change_lens", "camera.change_zoom",
 			"stream.start", "stream.stop", "stream.split_screen",
 			"dock.open_cover", "dock.close_cover", "dock.start_charging", "dock.stop_charging",
-			"asset.reboot", "asset.boot_sub_asset", "asset.remote_debug", "asset.change_ac_mode");
+			"asset.reboot", "asset.boot_sub_asset", "asset.remote_debug", "asset.change_ac_mode",
+			"mission.prepare", "mission.start", "mission.stop", "mission.pause", "mission.resume");
 
 	private static Coordinates coordinates(Map<String, Object> params) {
 		Coordinates coordinates = new Coordinates();
