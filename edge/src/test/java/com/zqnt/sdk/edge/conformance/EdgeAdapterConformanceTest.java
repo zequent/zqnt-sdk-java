@@ -11,6 +11,7 @@ import com.zqnt.sdk.edge.adapter.domains.CommandResult;
 import com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities;
 import com.zqnt.sdk.edge.adapter.domains.GoToRequest;
 import com.zqnt.sdk.edge.adapter.domains.ReturnToHomeRequest;
+import com.zqnt.sdk.edge.adapter.domains.TakePhotoRequest;
 import com.zqnt.sdk.edge.adapter.registry.RegistryEdgeAdapterTest;
 import com.zqnt.utils.events.proto.CommandExecutionEvent;
 import com.zqnt.utils.events.proto.CommandExecutionStatus;
@@ -126,6 +127,46 @@ class EdgeAdapterConformanceTest {
 
 		assertEquals(List.of("vendor.acme.spray is advertised but not executable"), report.problems());
 		assertTrue(adapter.custom.isEmpty());
+	}
+
+	/** Implements takePhoto, which runs camera.take_photo and its alias camera.capture_photo. */
+	private static final class CameraAdapter implements EdgeAdapterService {
+		final Set<String> advertised;
+
+		CameraAdapter(String... advertised) {
+			this.advertised = Set.of(advertised);
+		}
+
+		@Override
+		public CompletableFuture<CurrentCapabilities> getCapabilities(String sn) {
+			Set<Capability> capabilities = new java.util.HashSet<>();
+			for (String id : advertised) {
+				Capability capability = new Capability();
+				capability.setCommand(id);
+				capabilities.add(capability);
+			}
+			return CompletableFuture.completedFuture(new CurrentCapabilities(sn, null, capabilities, 0));
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> takePhoto(TakePhotoRequest request) {
+			return CompletableFuture.completedFuture(CommandResult.success("photo", request.getSn()));
+		}
+	}
+
+	@Test
+	void anAliasOfAnAdvertisedIdIsNotReportedAsUnadvertised() {
+		EdgeAdapterConformance.check(new CameraAdapter("camera.take_photo"), "SN-1").assertPassed();
+		EdgeAdapterConformance.check(new CameraAdapter("camera.capture_photo"), "SN-1").assertPassed();
+	}
+
+	@Test
+	void aTypedMethodWhoseIdsAreAllUnadvertisedIsFound() {
+		var report = EdgeAdapterConformance.check(new CameraAdapter(), "SN-1");
+
+		assertEquals(List.of("camera.capture_photo is executable but not advertised", "camera.take_photo is executable but not advertised"),
+				report.problems().stream().sorted().toList());
 	}
 
 	@Test
