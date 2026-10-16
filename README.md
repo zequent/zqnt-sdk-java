@@ -396,6 +396,21 @@ detections with the stream they came from); `watchAlerts(assetSns, minSeverity, 
 `minSeverity` or above (`null` = every severity). Both send heartbeats and fail like
 `watchTelemetry`.
 
+#### Live video streams
+
+```java
+for (LiveStream stream : zequent.liveStreams().listLiveStreams().get(10, TimeUnit.SECONDS)) {
+    System.out.println(stream.getAsset().getSn() + " " + stream.getPath() + " viewers=" + stream.getViewers());
+}
+```
+
+`listLiveStreams()` returns every live video stream of the caller's organization right now, as the
+media server sees it, whatever started it: the publishing asset (for a docked aircraft the aircraft
+itself), the media server path, `since` (when the media server started receiving it) and the number
+of `viewers`. It calls the live-data service with the client credential. When the platform has no
+current answer from the media server, the future fails with a retryable `SERVICE`
+`CommandException` (status `UNAVAILABLE`).
+
 **Upgrading from 2.x:** the typed calls of 2.x (`remoteControl()` and `liveData()`) are gone in
 3.0. [MIGRATION.md](client/MIGRATION.md) maps every typed call to its command id and params.
 
@@ -492,6 +507,7 @@ This SDK provides:
 - `ZequentClient` - Main client interface
 - `commands()`: any command by id (listCapabilities, executeCommand, executeAndWait, watch, cancel, streamManualControl)
 - `telemetry()`: telemetry samples and source status, detections and alerts (watchTelemetry, watchDetections, watchAlerts)
+- `liveStreams()`: the organization's live video streams (listLiveStreams)
 - `missionAutonomy()`: Applications, Skills and their executions
 - `connector()`: assets, payloads, policies and technical configuration
 - Request/Response models
