@@ -174,7 +174,8 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
             ▼                        ▼                        ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │ Remote Control      │  │ Mission Autonomy    │  │ Live Data Service   │
-│ commands() (8002)   │  │ (Port 8004)         │  │ telemetry() (8003)  │
+│ commands() (8002)   │  │ (Port 8004)         │  │ telemetry(),        │
+│                     │  │                     │  │ liveStreams() (8003)│
 └─────────────────────┘  └─────────────────────┘  └─────────────────────┘
 ```
 
@@ -396,6 +397,20 @@ detections with the stream they came from); `watchAlerts(assetSns, minSeverity, 
 `minSeverity` or above (`null` = every severity). Both send heartbeats and fail like
 `watchTelemetry`.
 
+#### Live video streams
+
+```java
+for (LiveStream stream : zequent.liveStreams().listLiveStreams().join()) {
+    System.out.println(stream.getAsset().getSn() + " " + stream.getPath() + " " + stream.getViewers());
+}
+```
+
+`listLiveStreams()` returns every `LiveStream` of the caller's organization that is live right now:
+the asset publishing it (for a docked aircraft, the aircraft), the media server's `path`, `since` when
+it is received and how many `viewers` read it. The future fails with a `CommandException` whose
+`getStatus()` is `PERMISSION_DENIED` when the organization's license does not include live streams,
+`UNAVAILABLE` when the platform has no current answer from the media server.
+
 **Upgrading from 2.x:** the typed calls of 2.x (`remoteControl()` and `liveData()`) are gone in
 3.0. [MIGRATION.md](client/MIGRATION.md) maps every typed call to its command id and params.
 
@@ -492,6 +507,7 @@ This SDK provides:
 - `ZequentClient` - Main client interface
 - `commands()`: any command by id (listCapabilities, executeCommand, executeAndWait, watch, cancel, streamManualControl)
 - `telemetry()`: telemetry samples and source status, detections and alerts (watchTelemetry, watchDetections, watchAlerts)
+- `liveStreams()`: the live video streams of the organization (listLiveStreams)
 - `missionAutonomy()`: Applications, Skills and their executions
 - `connector()`: assets, payloads, policies and technical configuration
 - Request/Response models
