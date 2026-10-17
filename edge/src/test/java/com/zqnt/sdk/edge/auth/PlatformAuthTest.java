@@ -82,7 +82,7 @@ class PlatformAuthTest {
 
     @Test
     void theServerInterceptorRefusesCommandsWithoutThePlatformsToken() throws Exception {
-        PlatformAuthServerInterceptor interceptor = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, PUBLIC, false));
+        PlatformAuthServerInterceptor interceptor = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, PUBLIC, null, false));
         assertEquals(Status.Code.UNAUTHENTICATED, call(interceptor, METHOD, null).getCode());
         assertEquals(Status.Code.UNAUTHENTICATED, call(interceptor, METHOD, "Bearer " + platformToken(OTHER)).getCode());
         assertNull(call(interceptor, METHOD, "Bearer " + platformToken(KEYS)), "the platform's token passes");
@@ -92,8 +92,8 @@ class PlatformAuthTest {
     @Test
     void withoutAKeyEverythingIsRefusedAndTheDevSwitchOpensEverything() throws Exception {
         assertEquals(Status.Code.UNAUTHENTICATED, call(new PlatformAuthServerInterceptor(
-                new EdgeAuthConfig(null, null, false)), METHOD, "Bearer " + platformToken(KEYS)).getCode());
-        assertNull(call(new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, true)), METHOD, null));
+                new EdgeAuthConfig(null, null, null, false)), METHOD, "Bearer " + platformToken(KEYS)).getCode());
+        assertNull(call(new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, null, true)), METHOD, null));
     }
 
     @Test
