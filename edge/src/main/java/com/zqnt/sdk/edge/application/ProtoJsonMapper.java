@@ -82,6 +82,7 @@ public class ProtoJsonMapper {
         apply(builder, ReturnToHomeRequest.ReturnToHomeRequestBuilder::tid, request.getBase().getTid());
         return builder
                 .altitude(valueOrNull(request.hasRequest() && request.getRequest().hasAltitude(), request.getRequest().getAltitude()))
+                .externalId(request.getBase().getExternalId())
                 .build();
     }
 
@@ -141,6 +142,7 @@ public class ProtoJsonMapper {
                 .altitude((float) request.getCoordinate().getAltitude())
                 .locked(valueOrNull(request.hasLocked(), request.getLocked()))
                 .payloadIndex(valueOrNull(request.hasPayloadIndex(), request.getPayloadIndex()))
+                .externalId(request.getBase().getExternalId())
                 .build();
     }
 

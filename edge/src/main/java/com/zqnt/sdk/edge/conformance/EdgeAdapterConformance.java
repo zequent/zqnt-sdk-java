@@ -40,10 +40,11 @@ import java.util.concurrent.TimeUnit;
  * contract the platform relies on.
  *
  * <ul>
- *   <li>every advertised id is executable: registered, or executing it with a minimal value of its
+ *   <li>every advertised, available id is executable: registered, or executing it with a minimal value of its
  *   input schema is not refused as unsupported (nor as invalid by its own schema);</li>
  *   <li>every executable id is advertised: every registered id, and every built-in id the adapter
- *   implements typed ({@link Options#probeBuiltIns()});</li>
+ *   implements typed ({@link Options#probeBuiltIns()}), which v3 refuses while it is unadvertised, unless another
+ *   published id runs the same typed method (an alias such as {@code camera.capture_photo});</li>
  *   <li>input and output schemas parse; an ASYNCHRONOUS command names a completion event it declares;</li>
  *   <li>every payload has a unique ref, and a command targeting a payload names a reported one;</li>
  *   <li>{@link #checkCommandEvents}: every command event carries its execution id, asset, state and
@@ -123,7 +124,7 @@ public final class EdgeAdapterConformance {
 			if (registry != null && registry.contains(id)) {
 				continue;
 			}
-			if (options.probeAdvertised()) {
+			if (options.probeAdvertised() && capability.getState() == com.zqnt.protos.capability.v3.CapabilityState.CAPABILITY_STATE_AVAILABLE) {
 				Map<String, Object> sample = sampleParams(capability);
 				CommandResult result = probe(service, sn, id, sample, options, problems);
 				if (result != null && result.getState() == CommandState.COMMAND_STATE_REJECTED) {
@@ -142,12 +143,11 @@ public final class EdgeAdapterConformance {
 			}
 		}
 		if (options.probeBuiltIns()) {
+			Set<String> published = new HashSet<>(advertised);
+			if (registry != null) published.addAll(registry.commandIds());
 			for (String id : BuiltInCommandDispatch.builtInIds()) {
-				if (advertised.contains(id) || (registry != null && registry.contains(id))) continue;
-				CommandResult result = probe(service, sn, id, Map.of(), options, problems);
-				boolean unsupported = result == null || (result.getState() == CommandState.COMMAND_STATE_REJECTED
-						&& CommandRegistry.NOT_SUPPORTED.equals(result.getError().getCode()));
-				if (!unsupported) problems.add(id + " is executable but not advertised");
+				if (published.contains(id) || aliasPublished(id, published)) continue;
+				if (typedImplementation(adapter, sn, id, options, problems)) problems.add(id + " is executable but not advertised");
 			}
 		}
 		return new ConformanceReport(problems);
@@ -220,6 +220,24 @@ public final class EdgeAdapterConformance {
 		} catch (Exception e) {
 			problems.add(id + " could not be executed: " + message(e));
 			return null;
+		}
+	}
+
+	/** Whether another published id runs the same typed method as {@code id}, which makes {@code id} an alias of it. */
+	private static boolean aliasPublished(String id, Set<String> published) {
+		String method = BuiltInCommandDispatch.typedMethodId(id);
+		return published.stream().anyMatch(other -> !other.equals(id) && BuiltInCommandDispatch.typedMethodId(other).equals(method));
+	}
+
+	/** Whether the adapter runs {@code id} through its typed method, which a 2.x platform reaches but v3 never runs unadvertised. */
+	private static boolean typedImplementation(EdgeAdapterService adapter, String sn, String id, Options options,
+			List<String> problems) {
+		try {
+			var result = BuiltInCommandDispatch.dispatch(adapter, sn, id, Map.of());
+			return result.isPresent() && !result.get().get(options.timeout().toMillis(), TimeUnit.MILLISECONDS).isNotImplemented();
+		} catch (Exception e) {
+			problems.add(id + " could not be executed: " + message(e));
+			return false;
 		}
 	}
 

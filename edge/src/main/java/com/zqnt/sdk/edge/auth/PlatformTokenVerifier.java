@@ -4,19 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
-import java.security.KeyFactory;
-import java.security.PublicKey;
 import java.security.Signature;
-import java.security.spec.X509EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Optional;
 
 /**
  * Verifies the service token the platform puts on every call into the adapter. Contract (must
  * match core's {@code ServiceTokens}): compact JWS, {@code alg=EdDSA} (Ed25519),
  * {@code iss=zqnt-service}, {@code aud=zqnt-edge}, {@code scope} contains {@code platform},
- * {@code exp} in the future.
+ * {@code exp} in the future. The header's {@code kid} picks the key from {@link PlatformKeySet}.
  */
 public class PlatformTokenVerifier {
 
@@ -27,18 +25,15 @@ public class PlatformTokenVerifier {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
-    private final PublicKey key;
+    private final PlatformKeySet keys;
 
     /** @param publicKey the platform's Ed25519 public key, base64 DER (SubjectPublicKeyInfo) or PEM */
     public PlatformTokenVerifier(String publicKey) {
-        try {
-            String normalized = publicKey.replace("-----BEGIN PUBLIC KEY-----", "")
-                    .replace("-----END PUBLIC KEY-----", "").replaceAll("\\s", "");
-            this.key = KeyFactory.getInstance("Ed25519")
-                    .generatePublic(new X509EncodedKeySpec(Base64.getDecoder().decode(normalized)));
-        } catch (Exception e) {
-            throw new IllegalArgumentException("ZQNT_PLATFORM_PUBLIC_KEY is not a valid Ed25519 public key", e);
-        }
+        this(new PlatformKeySet(publicKey, null));
+    }
+
+    public PlatformTokenVerifier(PlatformKeySet keys) {
+        this.keys = keys;
     }
 
     /** @return the token's subject (the calling service) */
@@ -53,8 +48,9 @@ public class PlatformTokenVerifier {
             if (!"EdDSA".equals(header.path("alg").asText())) {
                 throw new EdgeAuthException("only EdDSA tokens are accepted");
             }
+            Optional<String> keyId = header.hasNonNull("kid") ? Optional.of(header.get("kid").asText()) : Optional.empty();
             Signature signature = Signature.getInstance("Ed25519");
-            signature.initVerify(key);
+            signature.initVerify(keys.forKeyId(keyId));
             signature.update((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
             if (!signature.verify(decoder.decode(parts[2]))) {
                 throw new EdgeAuthException("token signature is invalid");

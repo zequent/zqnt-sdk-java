@@ -12,4 +12,5 @@ public class ReturnToHomeRequest {
 	private String tid;
 	private String sn;
 	private Float altitude;
+	private String externalId;
 }

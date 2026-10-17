@@ -128,6 +128,25 @@ class CommandsImplTest {
     }
 
     @Test
+    void sendsACommandIdTheSdkHasNeverHeardOfAndReturnsItsResult() {
+        answerWith.set(CommandResult.newBuilder()
+                .setCommandExecutionId("exec-light")
+                .setCommandId("dock.light.toggle")
+                .setState(CommandState.COMMAND_STATE_SUCCEEDED)
+                .setResult(Struct.newBuilder().putFields("on", Value.newBuilder().setBoolValue(true).build()))
+                .build());
+
+        CommandResult result = commands.executeCommand("dock-1", "dock.light.toggle", Map.of("on", true)).join();
+
+        ExecuteCommandRequest sent = lastExecute.get();
+        assertEquals("dock.light.toggle", sent.getCommand().getCommandId());
+        assertEquals("dock-1", sent.getCommand().getAsset().getSn());
+        assertTrue(sent.getCommand().getParams().getFieldsOrThrow("on").getBoolValue());
+        assertEquals(CommandState.COMMAND_STATE_SUCCEEDED, result.getState());
+        assertTrue(result.getResult().getFieldsOrThrow("on").getBoolValue());
+    }
+
+    @Test
     void sendsTheOptionsOfACommandRequest() {
         commands.executeCommand(CommandRequest.builder()
                 .assetId("asset-uuid")
