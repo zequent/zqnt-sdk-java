@@ -181,7 +181,7 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
             ▼                        ▼                        ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │ Remote Control      │  │ Mission Autonomy    │  │ Live Data Service   │
-│ commands() (8002)   │  │ (Port 8004)         │  │ telemetry(),        │
+│ commands() (8002)   │  │ simulations() (8004)│  │ telemetry(),        │
 │                     │  │                     │  │ liveStreams() (8003)│
 └─────────────────────┘  └─────────────────────┘  └─────────────────────┘
 ```
@@ -418,6 +418,38 @@ it is received and how many `viewers` read it. The future fails with a `CommandE
 `getStatus()` is `PERMISSION_DENIED` when the organization's license does not include live streams,
 `UNAVAILABLE` when the platform has no current answer from the media server.
 
+#### Simulating an Application
+
+```java
+StartSimulationRequest request = StartSimulationRequest.newBuilder()
+        .setApplicationId(applicationId)
+        .addNodes(NodeScenario.newBuilder()
+                .setCommandId("flight.takeoff")
+                .setOutcome(NodeOutcome.NODE_OUTCOME_FAILURE)
+                .setErrorCode("flight.not_airborne"))
+        .addFleet(VirtualAsset.newBuilder().setSn("DRONE-1").setBatteryPercent(18))
+        .build();
+
+SimulationTrace trace = zequent.simulations()
+        .simulate(request, Duration.ofSeconds(1), Duration.ofMinutes(2))
+        .join();
+for (TraceStep step : trace.getStepsList()) {
+    System.out.println(step.getNodeId() + " " + step.getStatus() + " " + step.getSimulatedBy());
+}
+```
+
+`simulations()` runs an Application on a virtual fleet through `zqnt.application_simulation.v3.SimulationService`
+on mission-autonomy: the platform's engine runs the graph, every command is answered from its
+contract and the request's `NodeScenario`s (success, failure, timeout, delay, fixed output, approval
+answer), and nothing reaches a real asset. `startSimulation(request)` answers the execution id and
+status (a request without `context.idempotency_key` gets a new one), `simulationTrace(executionId)`
+the path the run took so far, `cancelSimulation(executionId)` stops it. `awaitSimulation(executionId,
+interval, timeout)` polls the trace until `SUCCEEDED`, `FAILED`, `CANCELLED` or `TIMED_OUT` and
+completes with it; when `timeout` elapses first it fails with category `TIMEOUT` and the run keeps
+going. `simulate(request, interval, timeout)` does both. Refusals fail with a `CommandException`:
+`INVALID_ARGUMENT` for an unusable scenario or fleet, `NOT_FOUND` for an Application or run of
+another organization.
+
 **Upgrading from 2.x:** the typed calls of 2.x (`remoteControl()` and `liveData()`) are gone in
 3.0. [MIGRATION.md](client/MIGRATION.md) maps every typed call to its command id and params.
 
@@ -515,6 +547,7 @@ This SDK provides:
 - `commands()`: any command by id (listCapabilities, executeCommand, executeAndWait, watch, cancel, streamManualControl)
 - `telemetry()`: telemetry samples and source status, detections and alerts (watchTelemetry, watchDetections, watchAlerts)
 - `liveStreams()`: the live video streams of the organization (listLiveStreams)
+- `simulations()`: simulated runs of an Application on a virtual fleet (startSimulation, simulationTrace, cancelSimulation, awaitSimulation, simulate)
 - `missionAutonomy()`: Applications, Skills and their executions
 - `connector()`: assets, payloads, policies and technical configuration
 - Request/Response models
