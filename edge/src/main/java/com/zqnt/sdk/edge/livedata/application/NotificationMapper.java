@@ -23,7 +23,7 @@ public class NotificationMapper {
 		if (request.hasBase()) {
 			data.setSn(request.getBase().getSn());
 			data.setTid(request.getBase().getTid());
-			data.setTimestamp(MapperSupport.toLocalDateTime(request.getBase().getTimestamp()));
+			data.setTimestamp(MapperSupport.toInstant(request.getBase().getTimestamp()));
 		}
 
 		NotificationEvent event = request.getEvent();
@@ -86,7 +86,7 @@ public class NotificationMapper {
 				.message(proto.hasMessage() ? proto.getMessage() : null)
 				.output(proto.hasOutput() ? structToMap(proto.getOutput()) : null)
 				.error(proto.hasError() ? proto.getError().getErrorMessage() : null)
-				.occurredAt(proto.hasOccurredAt() ? MapperSupport.toLocalDateTime(proto.getOccurredAt()) : null)
+				.occurredAt(proto.hasOccurredAt() ? MapperSupport.toInstant(proto.getOccurredAt()) : null)
 				.assetSn(proto.getAssetSn())
 				.build();
 	}
@@ -103,7 +103,7 @@ public class NotificationMapper {
 		if (data.getError() != null) {
 			builder.setError(GlobalErrorMessage.newBuilder().setErrorMessage(data.getError())
 					.setTimestamp(MapperSupport.toTimestamp(
-							data.getOccurredAt() != null ? data.getOccurredAt() : java.time.LocalDateTime.now())));
+							data.getOccurredAt() != null ? data.getOccurredAt() : java.time.Instant.now())));
 		}
 		if (data.getOccurredAt() != null) builder.setOccurredAt(MapperSupport.toTimestamp(data.getOccurredAt()));
 		return builder.build();
