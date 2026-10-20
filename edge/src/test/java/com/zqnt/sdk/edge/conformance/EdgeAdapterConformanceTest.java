@@ -6,9 +6,12 @@ import com.zqnt.protos.capability.v3.CommandState;
 import com.zqnt.protos.common.v3.AssetRef;
 import com.zqnt.sdk.edge.adapter.application.EdgeAdapterService;
 import com.zqnt.sdk.edge.adapter.domains.Capability;
+import com.zqnt.sdk.edge.adapter.domains.ChangeZoomRequest;
 import com.zqnt.sdk.edge.adapter.domains.CommandResult;
 import com.zqnt.sdk.edge.adapter.domains.CurrentCapabilities;
 import com.zqnt.sdk.edge.adapter.domains.GoToRequest;
+import com.zqnt.sdk.edge.adapter.domains.ReturnToHomeRequest;
+import com.zqnt.sdk.edge.adapter.domains.TakePhotoRequest;
 import com.zqnt.sdk.edge.adapter.registry.RegistryEdgeAdapterTest;
 import com.zqnt.utils.events.proto.CommandExecutionEvent;
 import com.zqnt.utils.events.proto.CommandExecutionStatus;
@@ -53,11 +56,15 @@ class EdgeAdapterConformanceTest {
 		}
 
 		@Override
-		public CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
-				Map<String, Object> params) {
-			return "camera.change_zoom".equals(commandType) || "flight.return_to_home".equals(commandType)
-					? CompletableFuture.completedFuture(CommandResult.success("ok", sn))
-					: CompletableFuture.completedFuture(CommandResult.notImplemented("unknown", sn));
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> changeZoom(ChangeZoomRequest request) {
+			return CompletableFuture.completedFuture(CommandResult.success("ok", request.getSn()));
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> returnToHome(ReturnToHomeRequest request) {
+			return CompletableFuture.completedFuture(CommandResult.success("ok", request.getSn()));
 		}
 	}
 
@@ -74,6 +81,92 @@ class EdgeAdapterConformanceTest {
 				"flight.return_to_home completes with flight.return_to_home.completed but does not declare that event"),
 				report.problems().toString());
 		assertThrows(AssertionError.class, report::assertPassed);
+	}
+
+	/** Implements open cover typed and a vendor command in its own routing; advertises both, and a cover it cannot close now. */
+	private static final class TypedAdapter implements EdgeAdapterService {
+		final List<String> custom = new java.util.ArrayList<>();
+
+		@Override
+		public CompletableFuture<CurrentCapabilities> getCapabilities(String sn) {
+			Capability open = new Capability();
+			open.setCommand("dock.open_cover");
+			Capability close = new Capability();
+			close.setCommand("dock.close_cover");
+			close.setState(com.zqnt.utils.devicecontrol.proto.CapabilityState.CAPABILITY_STATE_TEMPORARILY_UNAVAILABLE);
+			Capability spray = new Capability();
+			spray.setCommand("vendor.acme.spray");
+			return CompletableFuture.completedFuture(new CurrentCapabilities(sn, null, Set.of(open, close, spray), 0));
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> openCover(String sn) {
+			return CompletableFuture.completedFuture(CommandResult.success("open", sn));
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> closeCover(String sn, Boolean force) {
+			return CompletableFuture.completedFuture(CommandResult.success("closed", sn));
+		}
+
+		@Override
+		public CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
+				Map<String, Object> params) {
+			custom.add(commandType);
+			return CompletableFuture.completedFuture(CommandResult.success("sprayed", sn));
+		}
+	}
+
+	@Test
+	void anAdvertisedVendorIdOfAnAdapterWithoutRegistryIsNotExecutable() {
+		TypedAdapter adapter = new TypedAdapter();
+
+		var report = EdgeAdapterConformance.check(adapter, "SN-1");
+
+		assertEquals(List.of("vendor.acme.spray is advertised but not executable"), report.problems());
+		assertTrue(adapter.custom.isEmpty());
+	}
+
+	/** Implements takePhoto, which runs camera.take_photo and its alias camera.capture_photo. */
+	private static final class CameraAdapter implements EdgeAdapterService {
+		final Set<String> advertised;
+
+		CameraAdapter(String... advertised) {
+			this.advertised = Set.of(advertised);
+		}
+
+		@Override
+		public CompletableFuture<CurrentCapabilities> getCapabilities(String sn) {
+			Set<Capability> capabilities = new java.util.HashSet<>();
+			for (String id : advertised) {
+				Capability capability = new Capability();
+				capability.setCommand(id);
+				capabilities.add(capability);
+			}
+			return CompletableFuture.completedFuture(new CurrentCapabilities(sn, null, capabilities, 0));
+		}
+
+		@Override
+		@SuppressWarnings("deprecation")
+		public CompletableFuture<CommandResult> takePhoto(TakePhotoRequest request) {
+			return CompletableFuture.completedFuture(CommandResult.success("photo", request.getSn()));
+		}
+	}
+
+	@Test
+	void anAliasOfAnAdvertisedIdIsNotReportedAsUnadvertised() {
+		EdgeAdapterConformance.check(new CameraAdapter("camera.take_photo"), "SN-1").assertPassed();
+		EdgeAdapterConformance.check(new CameraAdapter("camera.capture_photo"), "SN-1").assertPassed();
+	}
+
+	@Test
+	void aTypedMethodWhoseIdsAreAllUnadvertisedIsFound() {
+		var report = EdgeAdapterConformance.check(new CameraAdapter(), "SN-1");
+
+		assertEquals(List.of("camera.capture_photo is executable but not advertised", "camera.take_photo is executable but not advertised"),
+				report.problems().stream().sorted().toList());
 	}
 
 	@Test

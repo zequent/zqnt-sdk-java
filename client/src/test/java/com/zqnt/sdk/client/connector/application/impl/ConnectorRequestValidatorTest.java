@@ -7,7 +7,7 @@ import com.zqnt.sdk.client.connector.domains.StoreTelemetryRequest;
 import com.zqnt.utils.edge.sdk.domains.TelemetryData;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -29,7 +29,7 @@ class ConnectorRequestValidatorTest {
     void rejectsTelemetryWithoutSourceTypeInsteadOfTreatingItAsSubAsset() {
         var request = StoreTelemetryRequest.builder()
                 .assetId("asset-1")
-                .telemetry(TelemetryData.builder().timestamp(LocalDateTime.now()).build())
+                .telemetry(TelemetryData.builder().timestamp(Instant.now()).build())
                 .build();
 
         var error = assertThrows(IllegalArgumentException.class,

@@ -21,7 +21,7 @@ public class DetectionMapper {
 		if (batch.hasBase()) {
 			data.setSn(batch.getBase().getSn());
 			data.setTid(batch.getBase().getTid());
-			data.setTimestamp(MapperSupport.toLocalDateTime(batch.getBase().getTimestamp()));
+			data.setTimestamp(MapperSupport.toInstant(batch.getBase().getTimestamp()));
 		}
 
 		if (batch.hasStreamUrl()) {

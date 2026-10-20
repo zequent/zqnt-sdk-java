@@ -4,6 +4,7 @@ import com.zqnt.sdk.edge.adapter.domains.*;
 import com.zqnt.sdk.edge.adapter.registry.CommandHandler;
 import com.zqnt.sdk.edge.adapter.registry.CommandRegistry;
 import com.zqnt.sdk.edge.adapter.registry.CommandRequest;
+import com.zqnt.sdk.edge.adapter.registry.CommandSchemas;
 import com.zqnt.utils.common.proto.AssetTypeEnum;
 
 import java.util.LinkedHashMap;
@@ -23,10 +24,14 @@ import java.util.concurrent.CompletableFuture;
  * }
  * }</pre>
  *
- * Capabilities (v2 and v3) are derived from the registry only. The v2 typed RPCs and
- * {@code SendCustomCommand} are routed onto the same handlers, with the typed request turned into
- * the params of the matching built-in id ({@code takeOff} becomes {@code flight.takeoff} with
- * latitude/longitude/altitude), so a command behaves the same whichever contract the platform speaks.
+ * Capabilities (v2 and v3) are derived from the registry only, and v3 executes nothing else. The v2
+ * typed RPCs and {@code SendCustomCommand} are routed onto the same handlers, with the typed request
+ * turned into the params of the matching built-in id ({@code takeOff} becomes {@code flight.takeoff}
+ * with latitude/longitude/altitude) and the request's execution id passed on, so a command behaves the
+ * same whichever contract the platform speaks. A v2 platform may send values as text; the bridge
+ * converts them by the command's input schema ({@link CommandSchemas#fromText}) before validation.
+ * A v2 {@code SendCustomCommand} for an id that is not registered goes to
+ * {@link #legacyCustomCommand}, which refuses it unless the adapter overrides it.
  */
 @SuppressWarnings("deprecation")
 public abstract class RegistryEdgeAdapter implements EdgeAdapterService {
@@ -63,26 +68,66 @@ public abstract class RegistryEdgeAdapter implements EdgeAdapterService {
 	@Override
 	public final CompletableFuture<CommandResult> sendCustomCommand(String sn, String componentId, String commandType,
 			Map<String, Object> params) {
-		return commands.execute(new CommandRequest(sn, componentId, commandType, params, null));
+		return sendCustomCommand(new CommandRequest(sn, componentId, commandType, params, null));
+	}
+
+	@Override
+	public final CompletableFuture<CommandResult> sendCustomCommand(CommandRequest request) {
+		if (commands.contains(request.commandId())) {
+			return bridge(request);
+		}
+		try {
+			CompletableFuture<CommandResult> result = legacyCustomCommand(request);
+			return result == null
+					? CompletableFuture.failedFuture(new IllegalStateException(request.commandId() + " legacy handler returned no result"))
+					: result;
+		} catch (RuntimeException e) {
+			return CompletableFuture.failedFuture(e);
+		}
+	}
+
+	/**
+	 * A v2 {@code SendCustomCommand} for an id that is not registered. Only 2.x platforms reach this;
+	 * v3 refuses an unregistered id before any adapter code runs. Refuses by default.
+	 *
+	 * @param request params exactly as sent, neither converted nor validated
+	 */
+	protected CompletableFuture<CommandResult> legacyCustomCommand(CommandRequest request) {
+		return CompletableFuture.completedFuture(CommandResult.notImplemented(
+				request.commandId() + " is not supported by this adapter", request.sn()));
+	}
+
+	private CompletableFuture<CommandResult> bridge(CommandRequest request) {
+		Map<String, Object> params = commands.capability(request.commandId())
+				.map(capability -> CommandSchemas.fromText(capability.getInputSchema(), request.params()))
+				.orElse(request.params());
+		return commands.execute(request.withParams(params));
 	}
 
 	private CompletableFuture<CommandResult> run(String sn, String commandId, Map<String, Object> params) {
-		return commands.execute(new CommandRequest(sn, null, commandId, params, null));
+		return run(sn, commandId, params, null);
+	}
+
+	private CompletableFuture<CommandResult> run(String sn, String commandId, Map<String, Object> params,
+			String externalId) {
+		String executionId = externalId == null || externalId.isBlank() ? null : externalId;
+		return bridge(new CommandRequest(sn, null, commandId, params, executionId));
 	}
 
 	@Override
 	public final CompletableFuture<CommandResult> takeOff(TakeOffRequest request) {
-		return run(request.getSn(), "flight.takeoff", coordinates(request.getCoordinates()));
+		return run(request.getSn(), "flight.takeoff", coordinates(request.getCoordinates()), request.getExternalId());
 	}
 
 	@Override
 	public final CompletableFuture<CommandResult> goTo(GoToRequest request) {
-		return run(request.getSn(), "navigation.go_to", coordinates(request.getCoordinates()));
+		return run(request.getSn(), "navigation.go_to", coordinates(request.getCoordinates()), request.getExternalId());
 	}
 
 	@Override
 	public final CompletableFuture<CommandResult> returnToHome(ReturnToHomeRequest request) {
-		return run(request.getSn(), "flight.return_to_home", params("altitude", request.getAltitude()));
+		return run(request.getSn(), "flight.return_to_home", params("altitude", request.getAltitude()),
+				request.getExternalId());
 	}
 
 	@Override
@@ -99,7 +144,7 @@ public abstract class RegistryEdgeAdapter implements EdgeAdapterService {
 	public final CompletableFuture<CommandResult> lookAt(LookAtRequest request) {
 		return run(request.getSn(), "gimbal.look_at", params("latitude", request.getLatitude(),
 				"longitude", request.getLongitude(), "altitude", request.getAltitude(),
-				"locked", request.getLocked(), "payloadIndex", request.getPayloadIndex()));
+				"locked", request.getLocked(), "payloadIndex", request.getPayloadIndex()), request.getExternalId());
 	}
 
 	@Override

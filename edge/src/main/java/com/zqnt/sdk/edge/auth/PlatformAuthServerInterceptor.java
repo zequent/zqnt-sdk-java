@@ -14,31 +14,50 @@ import lombok.extern.slf4j.Slf4j;
  * delegates to this, see edge-dji).
  */
 @Slf4j
-public class PlatformAuthServerInterceptor implements ServerInterceptor {
+public class PlatformAuthServerInterceptor implements ServerInterceptor, AutoCloseable {
 
     private static final Metadata.Key<String> AUTHORIZATION =
             Metadata.Key.of("authorization", Metadata.ASCII_STRING_MARSHALLER);
     private static final String BEARER = "Bearer ";
 
+    private static final String NOT_CONFIGURED = "neither ZQNT_PLATFORM_KEYS_URL nor ZQNT_PLATFORM_PUBLIC_KEY is configured";
+
     private final boolean disabled;
+    private final PlatformKeySet keys;
     private final PlatformTokenVerifier verifier;
     private final String misconfigured;
 
     public PlatformAuthServerInterceptor(EdgeAuthConfig config) {
+        this(config, config.disabled() ? null : new PlatformKeySet(config.platformPublicKey(), config.platformKeysUrl()));
+    }
+
+    public PlatformAuthServerInterceptor(EdgeAuthConfig config, PlatformKeySet keys) {
         this.disabled = config.disabled();
         if (disabled) {
             log.warn("ZQNT_EDGE_AUTH_DISABLED is set: this adapter accepts commands from ANYONE who can reach "
                     + "its port. Local SITL/simulator use only.");
+            this.keys = null;
             this.verifier = null;
             this.misconfigured = null;
-        } else if (config.platformPublicKey() == null || config.platformPublicKey().isBlank()) {
-            log.error("ZQNT_PLATFORM_PUBLIC_KEY is not set: every platform command will be refused. Set it to "
-                    + "the platform's SERVICE_AUTH_PUBLIC_KEY (or ZQNT_EDGE_AUTH_DISABLED=true for local SITL).");
+        } else if (!keys.hasKeysUrl() && !keys.hasStaticKey()) {
+            log.error("{}: every platform command will be refused. Set ZQNT_PLATFORM_KEYS_URL to the platform's "
+                    + "/api/admin-console/auth/service-keys and/or ZQNT_PLATFORM_PUBLIC_KEY to its SERVICE_AUTH_PUBLIC_KEY "
+                    + "(or ZQNT_EDGE_AUTH_DISABLED=true for local SITL).", NOT_CONFIGURED);
+            this.keys = null;
             this.verifier = null;
-            this.misconfigured = "ZQNT_PLATFORM_PUBLIC_KEY is not configured";
+            this.misconfigured = NOT_CONFIGURED;
         } else {
-            this.verifier = new PlatformTokenVerifier(config.platformPublicKey());
+            this.keys = keys;
+            this.verifier = new PlatformTokenVerifier(keys);
             this.misconfigured = null;
+            keys.start();
+        }
+    }
+
+    @Override
+    public void close() {
+        if (keys != null) {
+            keys.close();
         }
     }
 
@@ -54,7 +73,7 @@ public class PlatformAuthServerInterceptor implements ServerInterceptor {
     }
 
     /** {@code null} when the call may proceed, else the status to refuse it with. */
-    Status check(String fullMethodName, String authorization) {
+    public Status check(String fullMethodName, String authorization) {
         if (disabled || fullMethodName.startsWith("grpc.health.v1.Health/")) {
             return null;
         }

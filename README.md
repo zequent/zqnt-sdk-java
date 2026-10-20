@@ -70,11 +70,23 @@ public class AcmeDrone extends RegistryEdgeAdapter {
   spotlight, ...); they go out with the v3 capabilities as a full snapshot, so a payload left out is
   detached. A command acting on one targets it with `CAPABILITY_TARGET_TYPE_PAYLOAD` and the payload's ref.
 - `GetCapabilities` (v2 and v3) is derived from the registry only. v2 typed RPCs (`takeOff`, ...),
-  v2 `SendCustomCommand` and v3 `ExecuteCommand` all run the same handler. The typed methods of
-  `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
+  v2 `SendCustomCommand` and v3 `ExecuteCommand` all run the same handler, and the handler's
+  `CommandRequest.commandExecutionId()` is the platform's run id on both (v3 `command_execution_id`,
+  v2 `external_id` of `SendCustomCommand`, `takeOff`, `goTo`, `returnToHome` and `lookAt`). The typed
+  methods of `EdgeAdapterService` are deprecated; adapters that still implement them keep working.
+- v3 runs only published commands: an id that is not registered is REJECTED with
+  `command.not_supported` before any adapter code runs. An adapter without a registry runs only the
+  built-in ids it advertises as available (`BuiltInCommandDispatch.builtInIds()`), on their typed
+  methods; its vendor ids never reach `sendCustomCommand` over v3. A free-form command is reachable
+  only from a 2.x platform's `SendCustomCommand`: on a registry adapter through
+  `legacyCustomCommand(CommandRequest)`, which refuses unless the adapter overrides it.
 - Params are validated against the input schema before the handler runs, and numbers are converted
   to `Integer`/`Long` where the schema says `integer`. Invalid params are REJECTED with error code
-  `command.invalid_params` and a readable message; an unknown id with `command.not_supported`.
+  `command.invalid_params` and a readable message. v3 params are validated as sent; on v2 the bridge
+  first converts text the schema does not accept as text (`"13.405"` for a number, `"true"` for a
+  boolean, `"pitch_down"` for the enum value `PITCH_DOWN`), exact conversions only. Enum aliases
+  (a DJI name such as `SDR_ONLY` or `IRONBOW1` for a standard value) are not converted: a 2.x
+  platform must send the standard value.
 - **Risk:** every capability carries a `CommandSafety`. A standard id gets the rating of the
   platform's command catalog (`CommandCatalog`, e.g. `flight.takeoff` MOVE, `flight.land` CRITICAL,
   `camera.take_photo` OBSERVE); `capability.setSafety(...)` overrides it. A `vendor.*` command that
@@ -126,11 +138,18 @@ Both directions of an adapter's gRPC traffic are authenticated (package `com.zqn
   call into the platform. Issue one in the console (Edge Credentials,
   `POST /api/admin-console/edge-credentials`) or with `core/scripts/mint-edge-credential.py`. The
   platform refuses calls without it.
-- `PlatformAuthServerInterceptor` refuses every command not signed by the platform
-  (`ZQNT_PLATFORM_PUBLIC_KEY`, alias `SERVICE_AUTH_PUBLIC_KEY`); without the key it refuses
+- `PlatformAuthServerInterceptor` refuses every command not signed by the platform. It verifies with
+  the platform's published key set, `ZQNT_PLATFORM_KEYS_URL` (admin-console's
+  `/api/admin-console/auth/service-keys`, e.g.
+  `http://admin-console:8005/api/admin-console/auth/service-keys`), and/or the static key
+  `ZQNT_PLATFORM_PUBLIC_KEY` (alias `SERVICE_AUTH_PUBLIC_KEY`). A token naming a key (`kid`, such as
+  `service-token:v2`) is checked against the key set, which is fetched at start, refreshed every
+  5 minutes and, when a token names a key it does not know yet, at most every 30 seconds; a
+  rotated key therefore works without restarting the adapter. A token without `kid` is checked
+  against the static key, or the key set's key without `kid`. Without either setting it refuses
   everything. `ZQNT_EDGE_AUTH_DISABLED=true` accepts unauthenticated commands (local SITL only).
 
-`EdgeAuthConfig.fromEnv()` reads all three.
+`EdgeAuthConfig.fromEnv()` reads all of them.
 
 
 ## Client SDK
@@ -162,7 +181,8 @@ The **Zequent Client SDK** is a **Java library/dependency** that customers add t
             ▼                        ▼                        ▼
 ┌─────────────────────┐  ┌─────────────────────┐  ┌─────────────────────┐
 │ Remote Control      │  │ Mission Autonomy    │  │ Live Data Service   │
-│ commands() (8002)   │  │ (Port 8004)         │  │ telemetry() (8003)  │
+│ commands() (8002)   │  │ simulations() (8004)│  │ telemetry(),        │
+│                     │  │                     │  │ liveStreams() (8003)│
 └─────────────────────┘  └─────────────────────┘  └─────────────────────┘
 ```
 
@@ -384,6 +404,52 @@ detections with the stream they came from); `watchAlerts(assetSns, minSeverity, 
 `minSeverity` or above (`null` = every severity). Both send heartbeats and fail like
 `watchTelemetry`.
 
+#### Live video streams
+
+```java
+for (LiveStream stream : zequent.liveStreams().listLiveStreams().join()) {
+    System.out.println(stream.getAsset().getSn() + " " + stream.getPath() + " " + stream.getViewers());
+}
+```
+
+`listLiveStreams()` returns every `LiveStream` of the caller's organization that is live right now:
+the asset publishing it (for a docked aircraft, the aircraft), the media server's `path`, `since` when
+it is received and how many `viewers` read it. The future fails with a `CommandException` whose
+`getStatus()` is `PERMISSION_DENIED` when the organization's license does not include live streams,
+`UNAVAILABLE` when the platform has no current answer from the media server.
+
+#### Simulating an Application
+
+```java
+StartSimulationRequest request = StartSimulationRequest.newBuilder()
+        .setApplicationId(applicationId)
+        .addNodes(NodeScenario.newBuilder()
+                .setCommandId("flight.takeoff")
+                .setOutcome(NodeOutcome.NODE_OUTCOME_FAILURE)
+                .setErrorCode("flight.not_airborne"))
+        .addFleet(VirtualAsset.newBuilder().setSn("DRONE-1").setBatteryPercent(18))
+        .build();
+
+SimulationTrace trace = zequent.simulations()
+        .simulate(request, Duration.ofSeconds(1), Duration.ofMinutes(2))
+        .join();
+for (TraceStep step : trace.getStepsList()) {
+    System.out.println(step.getNodeId() + " " + step.getStatus() + " " + step.getSimulatedBy());
+}
+```
+
+`simulations()` runs an Application on a virtual fleet through `zqnt.application_simulation.v3.SimulationService`
+on mission-autonomy: the platform's engine runs the graph, every command is answered from its
+contract and the request's `NodeScenario`s (success, failure, timeout, delay, fixed output, approval
+answer), and nothing reaches a real asset. `startSimulation(request)` answers the execution id and
+status (a request without `context.idempotency_key` gets a new one), `simulationTrace(executionId)`
+the path the run took so far, `cancelSimulation(executionId)` stops it. `awaitSimulation(executionId,
+interval, timeout)` polls the trace until `SUCCEEDED`, `FAILED`, `CANCELLED` or `TIMED_OUT` and
+completes with it; when `timeout` elapses first it fails with category `TIMEOUT` and the run keeps
+going. `simulate(request, interval, timeout)` does both. Refusals fail with a `CommandException`:
+`INVALID_ARGUMENT` for an unusable scenario or fleet, `NOT_FOUND` for an Application or run of
+another organization.
+
 **Upgrading from 2.x:** the typed calls of 2.x (`remoteControl()` and `liveData()`) are gone in
 3.0. [MIGRATION.md](client/MIGRATION.md) maps every typed call to its command id and params.
 
@@ -480,6 +546,8 @@ This SDK provides:
 - `ZequentClient` - Main client interface
 - `commands()`: any command by id (listCapabilities, executeCommand, executeAndWait, watch, cancel, streamManualControl)
 - `telemetry()`: telemetry samples and source status, detections and alerts (watchTelemetry, watchDetections, watchAlerts)
+- `liveStreams()`: the live video streams of the organization (listLiveStreams)
+- `simulations()`: simulated runs of an Application on a virtual fleet (startSimulation, simulationTrace, cancelSimulation, awaitSimulation, simulate)
 - `missionAutonomy()`: Applications, Skills and their executions
 - `connector()`: assets, payloads, policies and technical configuration
 - Request/Response models

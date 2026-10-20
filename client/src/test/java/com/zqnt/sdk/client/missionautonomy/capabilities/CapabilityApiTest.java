@@ -48,7 +48,7 @@ class CapabilityApiTest {
                 SimpleExecutionSpecProto.newBuilder().setCommandId("flight.takeoff")).build();
 
         assertThrows(IllegalArgumentException.class, () -> new SkillExecutionCommand(
-                " ", validSpec, SkillExecutionOptionsProto.getDefaultInstance(), "key",
+                "drone-1", validSpec, SkillExecutionOptionsProto.getDefaultInstance(), " ",
                 null, null, null));
         assertThrows(IllegalArgumentException.class, () -> new SkillExecutionCommand(
                 "drone-1", SkillExecutionSpecProto.getDefaultInstance(),
@@ -73,6 +73,14 @@ class CapabilityApiTest {
             assertTrue(command.assetSn() == null || command.assetSn().isBlank(),
                     "a blank assetSn must survive as blank so the server resolves it");
         }
+    }
+
+    @Test
+    void acceptsABridgeCommandThatNamesNoAsset() {
+        var command = SkillExecutionCommand.simple(null, "integration.bridge.b-1", null, null, "key");
+
+        assertEquals("", command.assetSn());
+        assertEquals("integration.bridge.b-1", command.spec().getSimple().getCommandId());
     }
 
     @Test

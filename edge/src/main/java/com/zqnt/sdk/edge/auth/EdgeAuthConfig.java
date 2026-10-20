@@ -13,14 +13,17 @@ import java.util.Set;
  *   {@code core/scripts/mint-edge-credential.py}; {@link EdgeCredentialsClientInterceptor} puts it on
  *   every call.</li>
  *   <li><b>Platform to adapter</b>: the platform signs a short-lived service token (audience
- *   {@code zqnt-edge}) for every command; {@link PlatformAuthServerInterceptor} verifies it with
- *   {@code platformPublicKey} ({@code ZQNT_PLATFORM_PUBLIC_KEY}, alias
- *   {@code SERVICE_AUTH_PUBLIC_KEY}) and refuses everything else.</li>
+ *   {@code zqnt-edge}) for every command; {@link PlatformAuthServerInterceptor} verifies it with the
+ *   platform's published key set {@code platformKeysUrl} ({@code ZQNT_PLATFORM_KEYS_URL}, admin-console's
+ *   {@code /api/admin-console/auth/service-keys}) and/or the static {@code platformPublicKey}
+ *   ({@code ZQNT_PLATFORM_PUBLIC_KEY}, alias {@code SERVICE_AUTH_PUBLIC_KEY}) and refuses everything
+ *   else. Tokens naming a key ({@code kid}) need the key set; tokens without one the static key or
+ *   the set's key without {@code kid}.</li>
  * </ul>
  * {@code disabled} ({@code ZQNT_EDGE_AUTH_DISABLED=true}) turns the inbound check off, for a local
- * SITL/simulator stack only. Without a key and without the switch every command is refused.
+ * SITL/simulator stack only. Without any key and without the switch every command is refused.
  */
-public record EdgeAuthConfig(String edgeToken, String platformPublicKey, boolean disabled) {
+public record EdgeAuthConfig(String edgeToken, String platformPublicKey, String platformKeysUrl, boolean disabled) {
 
     private static final Set<String> TRUE = Set.of("1", "true", "yes", "on");
 
@@ -31,6 +34,7 @@ public record EdgeAuthConfig(String edgeToken, String platformPublicKey, boolean
         }
         String disabled = System.getenv("ZQNT_EDGE_AUTH_DISABLED");
         return new EdgeAuthConfig(blankToNull(System.getenv("ZQNT_EDGE_TOKEN")), key,
+                blankToNull(System.getenv("ZQNT_PLATFORM_KEYS_URL")),
                 disabled != null && TRUE.contains(disabled.trim().toLowerCase(Locale.ROOT)));
     }
 

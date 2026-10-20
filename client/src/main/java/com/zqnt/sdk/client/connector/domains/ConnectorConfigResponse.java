@@ -5,14 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class ConnectorConfigResponse {
     private boolean success;
     private String tid;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private List<TechnicalConfig> configs;
     private ConnectorResponse.ErrorInfo error;
 

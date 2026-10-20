@@ -16,6 +16,7 @@ import com.zqnt.utils.common.proto.AssetProtoDTO;
 import com.zqnt.utils.common.proto.OrganizationProtoDTO;
 import com.zqnt.utils.common.proto.SubAssetProtoDTO;
 import com.zqnt.utils.core.ProtoJsonUtils;
+import com.zqnt.utils.core.ProtobufHelpers;
 import com.zqnt.utils.devicecontrol.proto.*;
 import com.zqnt.utils.mission.proto.MissionProtoDTO;
 import com.zqnt.utils.mission.proto.SchedulerProtoDTO;
@@ -25,8 +26,6 @@ import com.zqnt.utils.missionautonomy.domains.*;
 import com.zqnt.utils.missionautonomy.domains.config.*;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.BiConsumer;
@@ -82,6 +81,7 @@ public class ProtoJsonMapper {
         apply(builder, ReturnToHomeRequest.ReturnToHomeRequestBuilder::tid, request.getBase().getTid());
         return builder
                 .altitude(valueOrNull(request.hasRequest() && request.getRequest().hasAltitude(), request.getRequest().getAltitude()))
+                .externalId(request.getBase().getExternalId())
                 .build();
     }
 
@@ -141,6 +141,7 @@ public class ProtoJsonMapper {
                 .altitude((float) request.getCoordinate().getAltitude())
                 .locked(valueOrNull(request.hasLocked(), request.getLocked()))
                 .payloadIndex(valueOrNull(request.hasPayloadIndex(), request.getPayloadIndex()))
+                .externalId(request.getBase().getExternalId())
                 .build();
     }
 
@@ -188,8 +189,8 @@ public class ProtoJsonMapper {
         set(builder::streamUrlPredefined, valueOrNull(proto.hasStreamUrlPredefined(), proto.getStreamUrlPredefined()));
         set(builder::externalDeviceSubType, valueOrNull(proto.hasExternalDeviceSubType(), proto.getExternalDeviceSubType()));
         set(builder::externalId, valueOrNull(proto.hasExternalId(), proto.getExternalId()));
-        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toLocalDateTime(proto.getCreatedAt())));
-        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toLocalDateTime(proto.getModifiedAt())));
+        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toInstant(proto.getCreatedAt())));
+        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toInstant(proto.getModifiedAt())));
         set(builder::modifiedFrom, valueOrNull(proto.hasModifiedFrom(), proto.getModifiedFrom()));
         builder.payloads(proto.getPayloadsList().stream().map(this::map).toList());
 
@@ -245,8 +246,8 @@ public class ProtoJsonMapper {
         set(builder::externalDeviceSubType, valueOrNull(proto.hasExternalDeviceSubType(), proto.getExternalDeviceSubType()));
         builder.subAssets(proto.getSubAssetsList().stream().map(this::map).toList());
         set(builder::organization, uuid(proto.getOrganization()));
-        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toLocalDateTime(proto.getCreatedAt())));
-        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toLocalDateTime(proto.getModifiedAt())));
+        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toInstant(proto.getCreatedAt())));
+        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toInstant(proto.getModifiedAt())));
         set(builder::modifiedFrom, valueOrNull(proto.hasModifiedFrom(), proto.getModifiedFrom()));
         builder.payloads(proto.getPayloadsList().stream().map(this::map).toList());
 
@@ -298,9 +299,9 @@ public class ProtoJsonMapper {
                 .libraryVersion(proto.hasLibraryVersion() ? proto.getLibraryVersion() : null)
                 .state(proto.hasStateJson() ? JsonUtils.fromJson(proto.getStateJson(), Map.class) : null)
                 .active(proto.getActive())
-                .lastSeenAt(proto.hasLastSeenAt() ? toLocalDateTime(proto.getLastSeenAt()) : null)
-                .createdAt(proto.hasCreatedAt() ? toLocalDateTime(proto.getCreatedAt()) : null)
-                .modifiedAt(proto.hasModifiedAt() ? toLocalDateTime(proto.getModifiedAt()) : null)
+                .lastSeenAt(proto.hasLastSeenAt() ? toInstant(proto.getLastSeenAt()) : null)
+                .createdAt(proto.hasCreatedAt() ? toInstant(proto.getCreatedAt()) : null)
+                .modifiedAt(proto.hasModifiedAt() ? toInstant(proto.getModifiedAt()) : null)
                 .modifiedFrom(proto.hasModifiedFrom() ? proto.getModifiedFrom() : null)
                 .build();
     }
@@ -363,12 +364,12 @@ public class ProtoJsonMapper {
         set(builder::status, proto.getStatus());
         set(builder::type, proto.getType());
         set(builder::id, uuid(proto.getId()));
-        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toLocalDateTime(proto.getCreatedAt())));
-        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toLocalDateTime(proto.getModifiedAt())));
+        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toInstant(proto.getCreatedAt())));
+        set(builder::modifiedAt, valueOrNull(proto.hasModifiedAt(), toInstant(proto.getModifiedAt())));
         set(builder::modifiedFrom, valueOrNull(proto.hasUpdatedUser(), proto.getUpdatedUser()));
         set(builder::geoJson, valueOrNull(proto.hasGeoJson(), proto.getGeoJson()));
-        set(builder::startDate, valueOrNull(proto.hasStartDate(), toLocalDateTime(proto.getStartDate())));
-        set(builder::endDate, valueOrNull(proto.hasEndDate(), toLocalDateTime(proto.getEndDate())));
+        set(builder::startDate, valueOrNull(proto.hasStartDate(), toInstant(proto.getStartDate())));
+        set(builder::endDate, valueOrNull(proto.hasEndDate(), toInstant(proto.getEndDate())));
         // Note: assignedAssets Set<String> would need proto repeated field mapping if
         // available
 
@@ -404,7 +405,7 @@ public class ProtoJsonMapper {
         TaskDTO.TaskDTOBuilder builder = TaskDTO.builder();
         set(builder::status, proto.getStatus());
         set(builder::id, uuid(proto.getId()));
-        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toLocalDateTime(proto.getCreatedAt())));
+        set(builder::createdAt, valueOrNull(proto.hasCreatedAt(), toInstant(proto.getCreatedAt())));
         set(builder::missionId, uuid(proto.getMissionId()));
         set(builder::name, valueOrNull(proto.hasName(), proto.getName()));
         set(builder::description, valueOrNull(proto.hasDescription(), proto.getDescription()));
@@ -614,23 +615,11 @@ public class ProtoJsonMapper {
         return value == null ? null : value.toString();
     }
 
-    // Timestamp conversion utilities
-    public LocalDateTime toLocalDateTime(Timestamp timestamp) {
-        if (timestamp == null) {
-            return null;
-        }
-        Instant instant = Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
-        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+    public Instant toInstant(Timestamp timestamp) {
+        return ProtobufHelpers.toInstant(timestamp);
     }
 
-    public Timestamp toTimestamp(LocalDateTime localDateTime) {
-        if (localDateTime == null) {
-            return null;
-        }
-        Instant instant = localDateTime.atZone(ZoneId.systemDefault()).toInstant();
-        return Timestamp.newBuilder()
-                .setSeconds(instant.getEpochSecond())
-                .setNanos(instant.getNano())
-                .build();
+    public Timestamp toTimestamp(Instant instant) {
+        return ProtobufHelpers.toTimestamp(instant);
     }
 }

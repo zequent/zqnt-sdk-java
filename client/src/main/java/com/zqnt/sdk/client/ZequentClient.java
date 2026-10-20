@@ -9,8 +9,12 @@ import com.zqnt.sdk.client.connector.application.Connector;
 import com.zqnt.sdk.client.connector.application.impl.ConnectorImpl;
 import com.zqnt.sdk.client.grpc.ChannelFactory;
 import com.zqnt.sdk.client.grpc.ClientCredentials;
+import com.zqnt.sdk.client.livestreams.application.LiveStreams;
+import com.zqnt.sdk.client.livestreams.application.impl.LiveStreamsImpl;
 import com.zqnt.sdk.client.missionautonomy.application.MissionAutonomy;
 import com.zqnt.sdk.client.missionautonomy.application.impl.MissionAutonomyImpl;
+import com.zqnt.sdk.client.simulation.application.Simulations;
+import com.zqnt.sdk.client.simulation.application.impl.SimulationsImpl;
 import com.zqnt.sdk.client.telemetry.application.Telemetry;
 import com.zqnt.sdk.client.telemetry.application.impl.TelemetryImpl;
 
@@ -37,6 +41,8 @@ public class ZequentClient implements AutoCloseable {
     private final Connector connector;
     private final Commands commands;
     private final Telemetry telemetry;
+    private final LiveStreams liveStreams;
+    private final Simulations simulations;
     private final List<ManagedChannel> channels;
 
 
@@ -47,12 +53,15 @@ public class ZequentClient implements AutoCloseable {
      * Note: This constructor is called by ZequentClientProducer, NOT by CDI directly.
      */
     ZequentClient(GrpcClientConfig config, MissionAutonomy missionAutonomy, Connector connector,
-                  Commands commands, Telemetry telemetry, List<ManagedChannel> channels) {
+                  Commands commands, Telemetry telemetry, LiveStreams liveStreams, Simulations simulations,
+                  List<ManagedChannel> channels) {
         this.config = config;
         this.missionAutonomy = missionAutonomy;
         this.connector = connector;
         this.commands = commands;
         this.telemetry = telemetry;
+        this.liveStreams = liveStreams;
+        this.simulations = simulations;
         this.channels = channels;
         log.info("ZequentClient initialized with {} channels", channels.size());
     }
@@ -94,6 +103,20 @@ public class ZequentClient implements AutoCloseable {
      */
     public Telemetry telemetry() {
         return telemetry;
+    }
+
+    /**
+     * Live video of assets: the streams of the organization that are live right now.
+     */
+    public LiveStreams liveStreams() {
+        return liveStreams;
+    }
+
+    /**
+     * Simulated runs of an Application on a virtual fleet: start one, read its trace, cancel it.
+     */
+    public Simulations simulations() {
+        return simulations;
     }
 
     /**
@@ -326,8 +349,11 @@ public class ZequentClient implements AutoCloseable {
             Connector connector = ConnectorImpl.create(globalConfig, connectorChannel);
             Commands commands = CommandsImpl.create(globalConfig, remoteControlChannel);
             Telemetry telemetry = TelemetryImpl.create(globalConfig, liveDataChannel);
+            LiveStreams liveStreams = LiveStreamsImpl.create(globalConfig, liveDataChannel);
+            Simulations simulations = SimulationsImpl.create(globalConfig, missionAutonomyChannel);
 
-            return new ZequentClient(globalConfig, missionAutonomy, connector, commands, telemetry, channels);
+            return new ZequentClient(globalConfig, missionAutonomy, connector, commands, telemetry, liveStreams,
+                    simulations, channels);
         }
 
         private ServiceConfig buildServiceConfig(ServiceConfigBuilder builder, String serviceName, String envPrefix) {
