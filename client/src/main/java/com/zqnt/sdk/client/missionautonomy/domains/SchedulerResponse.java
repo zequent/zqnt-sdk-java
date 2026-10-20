@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Data
 @Builder
@@ -16,7 +16,7 @@ public class SchedulerResponse {
     private boolean success;
     private String tid;
     private String schedulerId;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private ErrorInfo error;
     private ProgressInfo progress;
     private SchedulerDTO schedulerData;
@@ -28,7 +28,7 @@ public class SchedulerResponse {
     public static class ErrorInfo {
         private String errorCode;
         private String errorMessage;
-        private LocalDateTime timestamp;
+        private Instant timestamp;
     }
 
     @Data

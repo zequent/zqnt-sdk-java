@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
@@ -76,7 +76,7 @@ public class StoreNotificationRequest {
         private Float progress;
         private String message;
         private Map<String, Object> output;
-        private LocalDateTime occurredAt;
+        private Instant occurredAt;
         private String assetSn;
     }
 

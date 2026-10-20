@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -18,7 +18,7 @@ public class ConnectorResponse {
     private boolean success;
     private String tid;
     private String id;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private String assetId;
     private String message;
     private AssetDTO asset;
@@ -38,6 +38,6 @@ public class ConnectorResponse {
     public static class ErrorInfo {
         private String errorCode;
         private String errorMessage;
-        private LocalDateTime timestamp;
+        private Instant timestamp;
     }
 }

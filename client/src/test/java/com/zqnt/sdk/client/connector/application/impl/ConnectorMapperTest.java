@@ -13,7 +13,7 @@ import com.zqnt.utils.events.proto.NotificationEventType;
 import com.zqnt.utils.events.proto.NotificationSeverity;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
@@ -82,7 +82,7 @@ class ConnectorMapperTest {
 
     @Test
     void mapsPojoTelemetryToInternalBatchRequest() {
-        LocalDateTime timestamp = LocalDateTime.of(2026, 7, 25, 12, 30);
+        Instant timestamp = Instant.parse("2026-07-25T12:30:00Z");
         TelemetryData telemetry = TelemetryData.builder()
                 .timestamp(timestamp)
                 .latitude(47.3769)
@@ -112,7 +112,7 @@ class ConnectorMapperTest {
 
     @Test
     void mapsPojoDetectionAndNotificationToInternalBatchRequests() {
-        LocalDateTime detectedAt = LocalDateTime.of(2026, 7, 25, 12, 45);
+        Instant detectedAt = Instant.parse("2026-07-25T12:45:00Z");
         var detection = DetectionDTO.builder()
                 .assetSn("asset-sn")
                 .objectId("object-1")

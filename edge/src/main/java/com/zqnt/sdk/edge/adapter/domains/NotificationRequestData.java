@@ -10,7 +10,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Map;
 
 @Data
@@ -21,7 +21,7 @@ public class NotificationRequestData {
 
 	private String tid;
 	private String sn;
-	private LocalDateTime timestamp;
+	private Instant timestamp;
 
 	// Only one of the following event fields should be set (oneof)
 	private AssetStatusEventData assetStatusEvent;
@@ -58,7 +58,7 @@ public class NotificationRequestData {
 		private String message;
 		private Map<String, Object> output;
 		private String error;
-		private LocalDateTime occurredAt;
+		private Instant occurredAt;
 		private String assetSn;
 	}
 
