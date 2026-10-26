@@ -13,8 +13,8 @@
     <properties>
         <test.excludedGroups>integration</test.excludedGroups>
         <guava.version>33.7.2-android</guava.version>
-        <jackson3.version>3.2.3</jackson3.version>
-        <jackson.version>2.22.3</jackson.version>
+        <jackson3.version>3.2.4</jackson3.version>
+        <jackson.version>2.22.4</jackson.version>
     </properties>
 
     <dependencyManagement>
