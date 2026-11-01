@@ -18,10 +18,14 @@ import java.util.regex.PatternSyntaxException;
  * <p>Params arrive as a protobuf Struct, where every number is a double. Validation converts a
  * number to {@link Integer} (or {@link Long}) wherever the schema says {@code integer}, once, so no
  * handler has to; a fractional value there is an error.
+ *
+ * <p>{@link #fromText} is the lenient step the v2 bridge runs before validation; v3 params are
+ * validated as sent.
  */
 public final class CommandSchemas {
 
 	private static final Set<String> TYPES = Set.of("object", "array", "string", "number", "integer", "boolean", "null");
+	private static final Pattern DECIMAL = Pattern.compile("[+-]?(\\d+(\\.\\d*)?|\\.\\d+)([eE][+-]?\\d+)?");
 
 	private CommandSchemas() {
 	}
@@ -47,6 +51,23 @@ public final class CommandSchemas {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> result = coerced instanceof Map<?, ?> map ? (Map<String, Object>) map : input;
 		return new Validation(result, List.copyOf(errors));
+	}
+
+	/**
+	 * Params with text converted to what the schema asks for, where the conversion is exact: a number
+	 * or integer written as text ({@code "13.405"}), {@code "true"}/{@code "false"} for a boolean, and
+	 * an enum value in another case ({@code "pitch_down"} for {@code PITCH_DOWN}). A value the schema
+	 * already accepts is left as it is, so text stays text wherever text is allowed ({@code "0123"}),
+	 * and anything that does not convert exactly ({@code "NaN"}, {@code "1.5"} for an integer,
+	 * {@code "warm"}) is left for validation to reject.
+	 */
+	public static Map<String, Object> fromText(Map<String, Object> schema, Map<String, Object> params) {
+		if (schema == null || schema.isEmpty() || params == null) {
+			return params;
+		}
+		@SuppressWarnings("unchecked")
+		Map<String, Object> converted = (Map<String, Object>) convertText(schema, params);
+		return converted;
 	}
 
 	/** Problems that make {@code schema} unusable; empty when it is a schema this class understands. */
@@ -168,6 +189,48 @@ public final class CommandSchemas {
 			return checkObject(schema, map, path, errors);
 		}
 		return checked;
+	}
+
+	private static Object convertText(Map<String, Object> schema, Object value) {
+		if (value instanceof Map<?, ?> map) {
+			Map<String, Object> properties = properties(schema);
+			Map<String, Object> converted = new LinkedHashMap<>();
+			map.forEach((key, item) -> {
+				String name = String.valueOf(key);
+				Object propertySchema = properties.containsKey(name) ? properties.get(name) : schema.get("additionalProperties");
+				converted.put(name, propertySchema instanceof Map<?, ?> nested ? convertText(asSchema(nested), item) : item);
+			});
+			return converted;
+		}
+		if (value instanceof List<?> items) {
+			if (!(schema.get("items") instanceof Map<?, ?> itemSchema)) return items;
+			return items.stream().map(item -> convertText(asSchema(itemSchema), item)).toList();
+		}
+		if (!(value instanceof String text)) {
+			return value;
+		}
+		if (schema.get("enum") instanceof List<?> allowed && !allowed.contains(text)) {
+			for (Object option : allowed) {
+				if (option instanceof String name && name.equalsIgnoreCase(text.trim())) return name;
+			}
+		}
+		List<String> types = types(schema);
+		if (types.isEmpty() || types.contains("string")) {
+			return text;
+		}
+		String trimmed = text.trim();
+		if (types.contains("boolean") && (trimmed.equalsIgnoreCase("true") || trimmed.equalsIgnoreCase("false"))) {
+			return Boolean.parseBoolean(trimmed);
+		}
+		if ((types.contains("number") || types.contains("integer")) && DECIMAL.matcher(trimmed).matches()) {
+			double number = Double.parseDouble(trimmed);
+			if (!Double.isFinite(number)) return text;
+			if (types.contains("number")) return number;
+			if (number == Math.rint(number)) {
+				return number >= Integer.MIN_VALUE && number <= Integer.MAX_VALUE ? (Object) (int) number : (Object) (long) number;
+			}
+		}
+		return text;
 	}
 
 	private static Object coerce(List<String> types, Object value) {

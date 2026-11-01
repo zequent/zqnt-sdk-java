@@ -6,7 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 @Data
@@ -16,7 +16,7 @@ import java.util.List;
 public class AssetMonitoringResponse {
     private boolean success;
     private String tid;
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     private List<AssetDTO> assets;
     private ConnectorResponse.ErrorInfo error;
 }

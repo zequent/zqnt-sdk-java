@@ -7,6 +7,7 @@ import com.google.protobuf.util.Timestamps;
 import com.zqnt.sdk.edge.adapter.application.EdgeAdapterService;
 import com.zqnt.sdk.edge.adapter.domains.CommandResult;
 import com.zqnt.sdk.edge.adapter.domains.ManualControlInput;
+import com.zqnt.sdk.edge.adapter.registry.CommandRequest;
 import com.zqnt.sdk.edge.application.ProtoJsonMapper;
 import com.zqnt.utils.common.proto.ErrorCode;
 import com.zqnt.utils.common.proto.GlobalErrorMessage;
@@ -65,8 +66,10 @@ public class EdgeAdapterGrpcServiceImpl extends EdgeAdapterServiceGrpc.EdgeAdapt
 			StreamObserver<CustomCommandResponse> responseObserver) {
 		String componentId = request.hasTarget() && request.getTarget().hasTargetRef()
 				? request.getTarget().getTargetRef() : null;
-		edgeAdapterService.sendCustomCommand(request.getBase().getSn(), componentId,
-				request.getCommandId(), structToMap(request.getParams()))
+		String executionId = request.getBase().hasExternalId() && !request.getBase().getExternalId().isBlank()
+				? request.getBase().getExternalId() : null;
+		edgeAdapterService.sendCustomCommand(new CommandRequest(request.getBase().getSn(), componentId,
+						request.getCommandId(), structToMap(request.getParams()), executionId))
 				.thenAccept(result -> {
 					CustomCommandResponse.Builder builder = CustomCommandResponse.newBuilder()
 							.setCommandId(request.getCommandId())

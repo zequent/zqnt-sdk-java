@@ -23,7 +23,7 @@ import com.zqnt.utils.missionautonomy.domains.MissionDTO;
 import com.zqnt.utils.missionautonomy.domains.SchedulerDTO;
 import com.zqnt.utils.missionautonomy.domains.WaypointDTO;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -578,7 +578,7 @@ final class ConnectorMapper {
         return FieldMask.newBuilder().addAllPaths(paths != null ? paths : List.of()).build();
     }
 
-    private LocalDateTime time(Timestamp value) { return ProtobufHelpers.toLocalDateTime(value); }
+    private Instant time(Timestamp value) { return ProtobufHelpers.toInstant(value); }
     private UUID uuid(String value) { return value == null || value.isBlank() ? null : UUID.fromString(value); }
     private String string(UUID value) { return value != null ? value.toString() : null; }
     private Double number(Number value) { return value != null ? value.doubleValue() : null; }

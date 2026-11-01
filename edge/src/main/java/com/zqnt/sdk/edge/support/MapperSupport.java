@@ -5,8 +5,6 @@ import com.zqnt.utils.common.proto.RequestBase;
 import com.zqnt.utils.core.ProtobufHelpers;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -35,26 +33,15 @@ public final class MapperSupport {
         return value == null ? "" : value;
     }
 
-    public static LocalDateTime toLocalDateTime(Timestamp timestamp) {
-        if (timestamp == null) {
-            return null;
-        }
-        Instant instant = Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
-        return LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+    public static Instant toInstant(Timestamp timestamp) {
+        return ProtobufHelpers.toInstant(timestamp);
     }
 
-    public static Timestamp toTimestamp(LocalDateTime localDateTime) {
-        if (localDateTime == null) {
-            return null;
-        }
-        Instant instant = localDateTime.atZone(ZoneId.systemDefault()).toInstant();
-        return Timestamp.newBuilder()
-                .setSeconds(instant.getEpochSecond())
-                .setNanos(instant.getNano())
-                .build();
+    public static Timestamp toTimestamp(Instant instant) {
+        return ProtobufHelpers.toTimestamp(instant);
     }
 
-    public static RequestBase.Builder requestBase(String sn, String tid, LocalDateTime timestamp) {
+    public static RequestBase.Builder requestBase(String sn, String tid, Instant timestamp) {
         return RequestBase.newBuilder()
                 .setSn(defaultString(sn))
                 .setTid(defaultString(tid))

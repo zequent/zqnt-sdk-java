@@ -3,6 +3,7 @@ package com.zqnt.sdk.edge.adapter.application;
 import com.zqnt.sdk.edge.adapter.domains.*;
 
 import com.zqnt.sdk.edge.adapter.registry.CommandRegistry;
+import com.zqnt.sdk.edge.adapter.registry.CommandRequest;
 
 import java.util.Map;
 import java.util.Optional;
@@ -63,6 +64,11 @@ public interface EdgeAdapterService {
 			String commandType, Map<String, Object> params) {
 		return CompletableFuture.completedFuture(
 				CommandResult.notImplemented("Custom command is not implemented for this asset", sn));
+	}
+
+	/** {@link #sendCustomCommand(String, String, String, Map)} with the platform's execution id of the run. */
+	default CompletableFuture<CommandResult> sendCustomCommand(CommandRequest request) {
+		return sendCustomCommand(request.sn(), request.targetRef(), request.commandId(), request.params());
 	}
 
 	/**

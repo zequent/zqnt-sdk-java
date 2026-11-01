@@ -9,7 +9,7 @@ import com.zqnt.sdk.edge.support.MapperSupport;
 import com.zqnt.utils.edge.sdk.domains.TelemetryData;
 import com.zqnt.utils.livedata.proto.*;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -26,7 +26,7 @@ public class TelemetryMapper {
         if (request.hasBase()) {
             data.setSn(request.getBase().getSn());
             data.setTid(request.getBase().getTid());
-            data.setTimestamp(MapperSupport.toLocalDateTime(request.getBase().getTimestamp()));
+            data.setTimestamp(MapperSupport.toInstant(request.getBase().getTimestamp()));
         }
         if (request.hasData()) data.setTelemetry(map(request.getData()));
         return data;
@@ -64,7 +64,7 @@ public class TelemetryMapper {
 
         return TelemetryData.builder()
                 .id(proto.getId())
-                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toLocalDateTime(proto.getTimestamp())))
+                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toInstant(proto.getTimestamp())))
                 .sn(proto.getSn())
                 .latitude(valueIf(proto::hasLatitude, proto::getLatitude))
                 .longitude(valueIf(proto::hasLongitude, proto::getLongitude))
@@ -190,7 +190,7 @@ public class TelemetryMapper {
                 .componentId(proto.getComponentId())
                 .externalId(valueIf(proto::hasExternalId, proto::getExternalId))
                 .kind(valueIf(proto::hasKind, proto::getKind))
-                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toLocalDateTime(proto.getTimestamp())))
+                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toInstant(proto.getTimestamp())))
                 .cameraData(valueIf(proto::hasCameraData, () -> map(proto.getCameraData())))
                 .rangeFinderData(valueIf(proto::hasRangeFinderData, () -> map(proto.getRangeFinderData())))
                 .sensorData(valueIf(proto::hasSensorData, () -> map(proto.getSensorData())))
@@ -213,7 +213,7 @@ public class TelemetryMapper {
     private TelemetryData.PayloadTelemetry map(PayloadTelemetry proto) {
         return TelemetryData.PayloadTelemetry.builder()
                 .id(proto.getId())
-                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toLocalDateTime(proto.getTimestamp())))
+                .timestamp(valueIf(proto::hasTimestamp, () -> MapperSupport.toInstant(proto.getTimestamp())))
                 .cameraData(valueIf(proto::hasCameraData, () -> map(proto.getCameraData())))
                 .rangeFinderData(valueIf(proto::hasRangeFinderData, () -> map(proto.getRangeFinderData())))
                 .sensorData(valueIf(proto::hasSensorData, () -> map(proto.getSensorData())))
@@ -448,11 +448,11 @@ public class TelemetryMapper {
         return hasValue.getAsBoolean() ? supplier.get() : null;
     }
 
-    public LocalDateTime toLocalDateTime(Timestamp timestamp) {
-        return MapperSupport.toLocalDateTime(timestamp);
+    public Instant toInstant(Timestamp timestamp) {
+        return MapperSupport.toInstant(timestamp);
     }
 
-    public Timestamp toTimestamp(LocalDateTime localDateTime) {
-        return MapperSupport.toTimestamp(localDateTime);
+    public Timestamp toTimestamp(Instant instant) {
+        return MapperSupport.toTimestamp(instant);
     }
 }

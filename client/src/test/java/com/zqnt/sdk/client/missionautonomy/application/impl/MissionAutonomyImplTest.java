@@ -8,7 +8,8 @@ import com.zqnt.utils.missionautonomy.domains.config.PoiTaskConfig;
 import com.zqnt.utils.missionautonomy.domains.config.WaypointTaskConfig;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -87,12 +88,12 @@ class MissionAutonomyImplTest {
 
     @Test
     void mapsSchedulerAuditTimestamps() {
-        LocalDateTime createdAt = LocalDateTime.of(2026, 7, 25, 12, 30);
+        Instant createdAt = Instant.parse("2026-07-25T12:30:00Z");
         SchedulerDTO scheduler = new SchedulerDTO();
         scheduler.setName("Daily");
         scheduler.setCronExpression("0 0 * * *");
         scheduler.setCreatedAt(createdAt);
-        scheduler.setModifiedAt(createdAt.plusHours(1));
+        scheduler.setModifiedAt(createdAt.plus(Duration.ofHours(1)));
 
         SchedulerProtoDTO mapped = MissionAutonomyImpl
                 .mapSchedulerDtoToProto(SchedulerProtoDTO.newBuilder(), scheduler)
