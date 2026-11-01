@@ -603,3 +603,16 @@ packages of the old repositories; never put old and new artifacts on one classpa
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE).
+
+### Dependency licences
+
+CI fails when a dependency's licence is not allowed by [licences/policy.yaml](licences/policy.yaml)
+(the same policy in every Zequent SDK; human-readable in the docs under `edge/licence-policy`).
+Every dependency, including test-only ones, is listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+After changing a dependency in a `pom.xml`, run `scripts/licence-gate.sh` (needs Maven and `uv`) and commit `THIRD_PARTY.md`.
+A dependency the policy rejects but that was reviewed goes into
+[licences/exceptions.yaml](licences/exceptions.yaml) with reason, reviewer and date.
+
+Code generated from a `.proto` file carries the licence of that file: never generate code from
+GPL-licensed protos (for example the Meshtastic protobufs) into this repository; such a protocol is
+spoken by a separate process.
