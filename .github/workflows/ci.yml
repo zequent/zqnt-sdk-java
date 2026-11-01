@@ -48,6 +48,33 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_ACTOR: ${{ github.actor }}
 
+  licences:
+    name: Licence gate
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: temurin
+          cache: maven
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+
+      - name: Check dependency licences
+        run: scripts/licence-gate.sh --check
+        env:
+          MAVEN_ARGS: --settings .github/maven-settings.xml
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
   secrets:
     name: Secret scan
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
@@ -68,7 +95,7 @@ jobs:
   preview:
     name: Publish preview
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [test, secrets]
+    needs: [test, licences, secrets]
     runs-on: ubuntu-latest
     permissions:
       contents: read
