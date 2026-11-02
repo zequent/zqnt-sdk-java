@@ -28,12 +28,19 @@ public class PlatformAuthServerInterceptor implements ServerInterceptor, AutoClo
     private final String misconfigured;
 
     public PlatformAuthServerInterceptor(EdgeAuthConfig config) {
-        this(config, config.disabled() ? null : new PlatformKeySet(config.platformPublicKey(), config.platformKeysUrl()));
+        this(config, config.disabled() || config.attachedToEdgeNode() ? null
+                : new PlatformKeySet(config.platformPublicKey(), config.platformKeysUrl()));
     }
 
     public PlatformAuthServerInterceptor(EdgeAuthConfig config, PlatformKeySet keys) {
-        this.disabled = config.disabled();
-        if (disabled) {
+        this.disabled = config.disabled() || config.attachedToEdgeNode();
+        if (config.attachedToEdgeNode()) {
+            log.warn("Attached to a local Edge Node: platform commands are NOT verified -- the node does not sign them "
+                    + "yet (zqnt-api#40). The adapter socket's permissions are the only access control.");
+            this.keys = null;
+            this.verifier = null;
+            this.misconfigured = null;
+        } else if (disabled) {
             log.warn("ZQNT_EDGE_AUTH_DISABLED is set: this adapter accepts commands from ANYONE who can reach "
                     + "its port. Local SITL/simulator use only.");
             this.keys = null;
