@@ -1,5 +1,7 @@
 package com.zqnt.sdk.edge.auth;
 
+import com.zqnt.sdk.edge.node.EdgeNodeConfig;
+
 import java.util.Locale;
 import java.util.Set;
 
@@ -22,10 +24,20 @@ import java.util.Set;
  * </ul>
  * {@code disabled} ({@code ZQNT_EDGE_AUTH_DISABLED=true}) turns the inbound check off, for a local
  * SITL/simulator stack only. Without any key and without the switch every command is refused.
+ * <p>
+ * {@code attachedToEdgeNode} (set by {@link #fromEnv()} when {@code ZQNT_EDGE_NODE_SOCKET} and
+ * {@code ZQNT_ADAPTER_SOCKET} are, see {@link com.zqnt.sdk.edge.node.EdgeNode}) turns the inbound
+ * check off for calls from a Unix domain socket peer only: commands then come from the local Edge
+ * Node, and the node does not sign them yet (zqnt-api#40). Calls over TCP are still verified.
  */
-public record EdgeAuthConfig(String edgeToken, String platformPublicKey, String platformKeysUrl, boolean disabled) {
+public record EdgeAuthConfig(String edgeToken, String platformPublicKey, String platformKeysUrl, boolean disabled,
+        boolean attachedToEdgeNode) {
 
     private static final Set<String> TRUE = Set.of("1", "true", "yes", "on");
+
+    public EdgeAuthConfig(String edgeToken, String platformPublicKey, String platformKeysUrl, boolean disabled) {
+        this(edgeToken, platformPublicKey, platformKeysUrl, disabled, false);
+    }
 
     public static EdgeAuthConfig fromEnv() {
         String key = blankToNull(System.getenv("ZQNT_PLATFORM_PUBLIC_KEY"));
@@ -35,7 +47,8 @@ public record EdgeAuthConfig(String edgeToken, String platformPublicKey, String 
         String disabled = System.getenv("ZQNT_EDGE_AUTH_DISABLED");
         return new EdgeAuthConfig(blankToNull(System.getenv("ZQNT_EDGE_TOKEN")), key,
                 blankToNull(System.getenv("ZQNT_PLATFORM_KEYS_URL")),
-                disabled != null && TRUE.contains(disabled.trim().toLowerCase(Locale.ROOT)));
+                disabled != null && TRUE.contains(disabled.trim().toLowerCase(Locale.ROOT)),
+                EdgeNodeConfig.fromEnv().isPresent());
     }
 
     private static String blankToNull(String value) {
