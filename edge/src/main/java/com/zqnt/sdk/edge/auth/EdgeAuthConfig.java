@@ -26,9 +26,9 @@ import java.util.Set;
  * SITL/simulator stack only. Without any key and without the switch every command is refused.
  * <p>
  * {@code attachedToEdgeNode} (set by {@link #fromEnv()} when {@code ZQNT_EDGE_NODE_SOCKET} and
- * {@code ZQNT_ADAPTER_SOCKET} are, see {@link com.zqnt.sdk.edge.node.EdgeNode}) also turns the inbound
- * check off: commands then come from the local Edge Node over a Unix socket, and the node does not
- * sign them yet (zqnt-api#40).
+ * {@code ZQNT_ADAPTER_SOCKET} are, see {@link com.zqnt.sdk.edge.node.EdgeNode}) turns the inbound
+ * check off for calls from a Unix domain socket peer only: commands then come from the local Edge
+ * Node, and the node does not sign them yet (zqnt-api#40). Calls over TCP are still verified.
  */
 public record EdgeAuthConfig(String edgeToken, String platformPublicKey, String platformKeysUrl, boolean disabled,
         boolean attachedToEdgeNode) {

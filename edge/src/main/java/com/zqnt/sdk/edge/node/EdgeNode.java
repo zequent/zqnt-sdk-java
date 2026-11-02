@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
  * Attached, the adapter has no access to core (no Redis, no v2 fallback) and does not verify the
  * platform's token on commands, because the node does not sign them yet (zqnt-api#40): the socket's
  * permissions are the access control. {@link com.zqnt.sdk.edge.auth.EdgeAuthConfig#fromEnv()} turns
- * the check off in this mode only.
+ * the check off in this mode, for Unix domain socket peers only; calls over TCP are still verified.
  * <pre>{@code
  * try (EdgeNode node = EdgeNode.attach(EdgeNodeConfig.fromEnv().orElseThrow())) {
  *     node.serve(new EdgeAdapterGrpcServiceImpl(adapter), new EdgeAdapterV3GrpcServiceImpl(adapter));

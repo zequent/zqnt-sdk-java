@@ -48,6 +48,7 @@ import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder;
 import io.grpc.netty.shaded.io.netty.channel.EventLoopGroup;
 import io.grpc.netty.shaded.io.netty.channel.epoll.EpollEventLoopGroup;
@@ -61,6 +62,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.InetSocketAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -216,12 +218,43 @@ class EdgeNodeAttachTest {
 	}
 
 	@Test
-	void onlyAnAttachedAdapterSkipsThePlatformTokenCheck() {
+	void attachedOnlyAUnixSocketPeerSkipsThePlatformTokenCheck() throws Exception {
+		Drone drone = new Drone();
+		ExecuteCommandRequest request = ExecuteCommandRequest.newBuilder()
+				.setCommand(Command.newBuilder().setCommandId("flight.takeoff").setAsset(AssetRef.newBuilder().setSn(SN)))
+				.setCommandExecutionId("capexec:run-2:takeoff")
+				.build();
+		try (var auth = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, null, false, true));
+				EdgeNode attached = EdgeNode.attach(config)) {
+			attached.serve(() -> ServerInterceptors.intercept(new EdgeAdapterV3GrpcServiceImpl(drone), auth));
+			Server tcp = NettyServerBuilder.forAddress(new InetSocketAddress("127.0.0.1", 0))
+					.addService(ServerInterceptors.intercept(new EdgeAdapterV3GrpcServiceImpl(drone), auth))
+					.build()
+					.start();
+			ManagedChannel overTcp = Grpc.newChannelBuilderForAddress("127.0.0.1", tcp.getPort(),
+					InsecureChannelCredentials.create()).build();
+			ManagedChannel overSocket = Grpc.newChannelBuilder(config.adapterEndpoint(), InsecureChannelCredentials.create()).build();
+			try {
+				StatusRuntimeException refused = assertThrows(StatusRuntimeException.class,
+						() -> EdgeAdapterServiceGrpc.newBlockingStub(overTcp).executeCommand(request));
+				assertEquals(Status.Code.UNAUTHENTICATED, refused.getStatus().getCode());
+				assertEquals(CommandState.COMMAND_STATE_ACCEPTED,
+						EdgeAdapterServiceGrpc.newBlockingStub(overSocket).executeCommand(request).getResult().getState());
+			} finally {
+				overTcp.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+				overSocket.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+				tcp.shutdownNow().awaitTermination(5, TimeUnit.SECONDS);
+			}
+		}
+		assertEquals(1, drone.takeoffs.size());
+	}
+
+	@Test
+	void directModeVerifiesEveryPeer() {
 		String method = "zqnt.edge.v3.EdgeAdapterService/ExecuteCommand";
-		try (var direct = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, null, false));
-				var attached = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, null, false, true))) {
-			assertEquals(Status.Code.UNAUTHENTICATED, direct.check(method, null).getCode());
-			assertNull(attached.check(method, null));
+		try (var direct = new PlatformAuthServerInterceptor(new EdgeAuthConfig(null, null, null, false))) {
+			assertEquals(Status.Code.UNAUTHENTICATED,
+					direct.check(method, null, java.net.UnixDomainSocketAddress.of("/run/a.sock")).getCode());
 		}
 	}
 

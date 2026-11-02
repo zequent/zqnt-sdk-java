@@ -151,8 +151,9 @@ Set both sockets or neither. Attached, the adapter:
 - has no access to core: nothing is written to Redis and no channel to a core service is needed;
 - **does not verify the platform's token** on commands, because the node does not sign them yet
   (zqnt-api#40). `EdgeAuthConfig.fromEnv()` sets `attachedToEdgeNode` when both sockets are set, and
-  `PlatformAuthServerInterceptor` then lets commands through with a warning; the socket's permissions
-  are the only access control. Direct mode is unchanged.
+  `PlatformAuthServerInterceptor` then lets commands from a Unix domain socket peer through with a
+  warning; the socket's permissions are the only access control. A call over TCP (a server the adapter
+  still runs on a port) is verified as always. Direct mode is unchanged.
 
 The node's queue tells the adapter how hard to push (`node.queue()`):
 
@@ -198,7 +199,7 @@ Both directions of an adapter's gRPC traffic are authenticated (package `com.zqn
   against the static key, or the key set's key without `kid`. Without either setting it refuses
   everything. `ZQNT_EDGE_AUTH_DISABLED=true` accepts unauthenticated commands (local SITL only).
 
-`EdgeAuthConfig.fromEnv()` reads all of them. Attached to a local Edge Node the inbound check is off
+`EdgeAuthConfig.fromEnv()` reads all of them. Attached to a local Edge Node the inbound check is off for Unix socket peers only
 (see [Attaching to a local Edge Node](#attaching-to-a-local-edge-node)).
 
 
