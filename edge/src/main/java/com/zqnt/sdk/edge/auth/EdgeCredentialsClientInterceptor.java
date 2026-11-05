@@ -11,7 +11,9 @@ import io.grpc.MethodDescriptor;
 /**
  * Puts the adapter's edge credential ({@code ZQNT_EDGE_TOKEN}) on every call into the platform.
  * Attach it to each channel to connector / live-data / mission-autonomy / remote-control, e.g.
- * {@code ManagedChannelBuilder.forAddress(host, port).usePlaintext().intercept(interceptor)}.
+ * {@code InternalTls.fromEnv().channelBuilder(host, port).intercept(interceptor)} (plaintext, or TLS
+ * with the installation's CA when {@code ZQNT_INTERNAL_TLS} is set; see
+ * {@link com.zqnt.sdk.edge.tls.InternalTls}).
  * With no token it attaches nothing, and the platform refuses the calls.
  */
 public class EdgeCredentialsClientInterceptor implements ClientInterceptor {

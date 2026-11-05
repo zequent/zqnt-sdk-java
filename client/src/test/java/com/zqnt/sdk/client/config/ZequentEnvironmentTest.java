@@ -40,6 +40,25 @@ class ZequentEnvironmentTest {
     }
 
     @Test
+    void internalTlsDialsEveryServiceOverTlsWithTheInstallationCa() {
+        Map<String, String> env = Map.of("ZQNT_INTERNAL_TLS", "true");
+        ServiceConfig config = ZequentEnvironment.fromEnvironment(env::get, ZequentEnvironment.CONNECTOR, "connector", RR);
+        assertFalse(config.isUsePlaintext(), "TLS");
+        assertEquals(ZequentEnvironment.DEFAULT_INTERNAL_TLS_CA, config.getTlsCaFile());
+
+        Map<String, String> withCa = Map.of("ZQNT_INTERNAL_TLS", "1", "ZQNT_INTERNAL_TLS_CA", " /run/ca.crt ");
+        assertEquals("/run/ca.crt", ZequentEnvironment.fromEnvironment(withCa::get, ZequentEnvironment.LIVE_DATA, "live-data", RR).getTlsCaFile());
+
+        Map<String, String> servicePlain = Map.of("ZQNT_INTERNAL_TLS", "true", "LIVE_DATA_SERVICE_USE_PLAINTEXT", "true");
+        ServiceConfig plain = ZequentEnvironment.fromEnvironment(servicePlain::get, ZequentEnvironment.LIVE_DATA, "live-data", RR);
+        assertTrue(plain.isUsePlaintext(), "a service's own USE_PLAINTEXT wins");
+
+        ServiceConfig off = ZequentEnvironment.fromEnvironment(Map.of("ZQNT_INTERNAL_TLS", "false")::get, ZequentEnvironment.CONNECTOR, "connector", RR);
+        assertTrue(off.isUsePlaintext());
+        assertNull(off.getTlsCaFile());
+    }
+
+    @Test
     void aMalformedPortSaysWhichVariable() {
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class,
                 () -> ZequentEnvironment.fromEnvironment(Map.of("LIVE_DATA_SERVICE_PORT", "80a3")::get,

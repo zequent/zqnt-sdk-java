@@ -86,19 +86,25 @@ public class ZequentClientConfigFactory {
             storkServiceName = serviceName + "-service";
         }
 
+        boolean usePlaintext = props.usePlaintext().orElse(!properties.internalTls());
+        String tlsCaFile = props.tlsCaFile().filter(ca -> !ca.isBlank())
+                .orElse(properties.internalTls() ? properties.internalTlsCa() : null);
+
         ServiceConfig config = ServiceConfig.builder()
                 .serviceName(serviceName)
                 .host(props.host())
                 .port(port)
-                .usePlaintext(props.usePlaintext())
+                .usePlaintext(usePlaintext)
+                .tlsCaFile(usePlaintext ? null : tlsCaFile)
                 .useStork(props.useStork())
                 .storkServiceName(storkServiceName)
                 .loadBalancerType(loadBalancerType)
                 .maxInboundMessageSize(props.maxInboundMessageSize())
                 .build();
 
-        log.info("Service '{}' configured: host={}, port={}, useStork={}, loadBalancer={}",
+        log.info("Service '{}' configured: host={}, port={}, transport={}, useStork={}, loadBalancer={}",
                 serviceName, config.getHost(), config.getPort(),
+                config.isUsePlaintext() ? "plaintext" : config.getTlsCaFile() != null ? "tls (" + config.getTlsCaFile() + ")" : "tls",
                 config.isUseStork(), config.getLoadBalancerType());
 
         return config;
