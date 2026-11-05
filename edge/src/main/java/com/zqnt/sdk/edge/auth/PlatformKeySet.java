@@ -2,6 +2,7 @@ package com.zqnt.sdk.edge.auth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zqnt.sdk.edge.tls.InternalTls;
 import lombok.extern.slf4j.Slf4j;
 
 import java.net.URI;
@@ -31,7 +32,8 @@ import java.util.concurrent.TimeUnit;
  * token without {@code kid} is verified with the static key, or else with the set's key without
  * {@code kid}. The set is fetched in the background at {@link #start()}, refreshed every
  * {@code refreshInterval}, and on a token naming an unknown key, at most once per
- * {@code onDemandSpacing}.
+ * {@code onDemandSpacing}. An https key set URL is verified against the installation's CA when
+ * internal TLS is on ({@link InternalTls}).
  */
 @Slf4j
 public class PlatformKeySet implements AutoCloseable {
@@ -57,17 +59,34 @@ public class PlatformKeySet implements AutoCloseable {
     private volatile Published published = new Published(Map.of(), null);
 
     public PlatformKeySet(String staticKey, String keysUrl) {
-        this(staticKey, keysUrl, Clock.systemUTC(), REFRESH_INTERVAL, ON_DEMAND_SPACING);
+        this(staticKey, keysUrl, InternalTls.fromEnv());
+    }
+
+    public PlatformKeySet(String staticKey, String keysUrl, InternalTls internalTls) {
+        this(staticKey, keysUrl, Clock.systemUTC(), REFRESH_INTERVAL, ON_DEMAND_SPACING, internalTls);
     }
 
     public PlatformKeySet(String staticKey, String keysUrl, Clock clock, Duration refreshInterval,
             Duration onDemandSpacing) {
+        this(staticKey, keysUrl, clock, refreshInterval, onDemandSpacing, InternalTls.fromEnv());
+    }
+
+    public PlatformKeySet(String staticKey, String keysUrl, Clock clock, Duration refreshInterval,
+            Duration onDemandSpacing, InternalTls internalTls) {
         this.staticKey = isBlank(staticKey) ? null : parseStaticKey(staticKey);
         this.keysUrl = isBlank(keysUrl) ? null : parseUrl(keysUrl);
         this.clock = clock;
         this.refreshInterval = refreshInterval;
         this.onDemandSpacing = onDemandSpacing;
-        this.http = this.keysUrl == null ? null : HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT).build();
+        this.http = this.keysUrl == null ? null : httpClient(this.keysUrl, internalTls);
+    }
+
+    private static HttpClient httpClient(URI keysUrl, InternalTls internalTls) {
+        HttpClient.Builder builder = HttpClient.newBuilder().connectTimeout(FETCH_TIMEOUT);
+        if (internalTls.enabled() && "https".equalsIgnoreCase(keysUrl.getScheme())) {
+            builder.sslContext(internalTls.sslContext());
+        }
+        return builder.build();
     }
 
     public boolean hasStaticKey() {

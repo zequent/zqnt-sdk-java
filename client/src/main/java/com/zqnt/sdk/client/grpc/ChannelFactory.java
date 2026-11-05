@@ -2,11 +2,17 @@ package com.zqnt.sdk.client.grpc;
 
 import com.zqnt.sdk.client.config.GrpcClientConfig;
 import com.zqnt.sdk.client.config.ServiceConfig;
+import io.grpc.ChannelCredentials;
 import io.grpc.ClientInterceptor;
+import io.grpc.Grpc;
+import io.grpc.InsecureChannelCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.TlsChannelCredentials;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -51,17 +57,17 @@ public class ChannelFactory {
      */
     public static ManagedChannel createChannel(ServiceConfig config, String clientToken,
                                                List<? extends ClientInterceptor> interceptors) {
-        ManagedChannelBuilder<?> channelBuilder;
-
+        String target;
         if (config.isUseStork() && config.getStorkServiceName() != null) {
             // Use Stork service discovery
             log.info("Creating channel with Stork service discovery: {}", config.getStorkServiceName());
-            channelBuilder = ManagedChannelBuilder.forTarget("stork://" + config.getStorkServiceName());
+            target = "stork://" + config.getStorkServiceName();
         } else {
             // Direct connection
             log.info("Creating direct channel: {}:{}", config.getHost(), config.getPort());
-            channelBuilder = ManagedChannelBuilder.forAddress(config.getHost(), config.getPort());
+            target = config.getHost() + ":" + config.getPort();
         }
+        ManagedChannelBuilder<?> channelBuilder = Grpc.newChannelBuilder(target, channelCredentials(config));
 
         // Configure load balancing
         String loadBalancerPolicy = getLoadBalancerPolicy(config.getLoadBalancerType());
@@ -76,11 +82,6 @@ public class ChannelFactory {
                 .idleTimeout(5, TimeUnit.MINUTES)
                 .enableRetry()
                 .maxRetryAttempts(5);
-
-        // Configure TLS
-        if (config.isUsePlaintext()) {
-            channelBuilder.usePlaintext();
-        }
 
         // Configure max inbound message size
         if (config.getMaxInboundMessageSize() > 0) {
@@ -105,6 +106,26 @@ public class ChannelFactory {
         log.info("Channel created successfully for service: {}", config.getServiceName());
 
         return channel;
+    }
+
+    /**
+     * The channel's transport: plaintext, TLS against the system trust store, or TLS against the CA
+     * in {@link ServiceConfig#getTlsCaFile()} (an installation's internal CA).
+     */
+    static ChannelCredentials channelCredentials(ServiceConfig config) {
+        if (config.isUsePlaintext()) {
+            return InsecureChannelCredentials.create();
+        }
+        if (config.getTlsCaFile() == null || config.getTlsCaFile().isBlank()) {
+            return TlsChannelCredentials.create();
+        }
+        File ca = new File(config.getTlsCaFile().trim());
+        try {
+            return TlsChannelCredentials.newBuilder().trustManager(ca).build();
+        } catch (IOException e) {
+            throw new IllegalStateException("TLS for service " + config.getServiceName() + ": the CA file " + ca
+                    + " cannot be read: " + e.getMessage(), e);
+        }
     }
 
     private static String getLoadBalancerPolicy(ServiceConfig.LoadBalancerType type) {

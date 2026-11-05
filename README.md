@@ -199,6 +199,14 @@ Both directions of an adapter's gRPC traffic are authenticated (package `com.zqn
   against the static key, or the key set's key without `kid`. Without either setting it refuses
   everything. `ZQNT_EDGE_AUTH_DISABLED=true` accepts unauthenticated commands (local SITL only).
 
+Inside an installation whose traffic is encrypted ([Securing an installation](https://github.com/zequent/zqnt-docs/blob/main/admin/securing-an-installation.md)),
+`com.zqnt.sdk.edge.tls.InternalTls` is how the adapter dials the platform: with
+`ZQNT_INTERNAL_TLS=true` every channel built with `InternalTls.fromEnv().channelBuilder(host, port)`
+uses TLS, verifying the service's certificate against the installation's CA
+(`ZQNT_INTERNAL_TLS_CA`, default `/etc/zqnt/internal-tls/ca.crt`) and its host name, and an
+`https://` key-set URL is verified the same way; without the switch the channels are plaintext as
+before. The edge credential keeps authenticating the adapter — no client certificate is involved.
+
 `EdgeAuthConfig.fromEnv()` reads all of them. Attached to a local Edge Node the inbound check is off for Unix socket peers only
 (see [Attaching to a local Edge Node](#attaching-to-a-local-edge-node)).
 
@@ -290,11 +298,15 @@ integration maps the same names.
 | `LIVE_DATA_SERVICE_HOST` / `_PORT` / `_USE_PLAINTEXT` | `localhost` / `8003` / `true` |
 | `MISSION_AUTONOMY_SERVICE_HOST` / `_PORT` / `_USE_PLAINTEXT` | `localhost` / `8004` / `true` |
 | `ZQNT_CLIENT_TOKEN` | none — issue one in your local console too |
+| `ZQNT_INTERNAL_TLS` / `ZQNT_INTERNAL_TLS_CA` | `false` / `/etc/zqnt/internal-tls/ca.crt` |
 
 With nothing set, a developer reaches the local stack (`quarkus:dev` or `docker-compose.local.yml`).
 A deployment sets the hosts, `_USE_PLAINTEXT=false` for TLS against the system trust store whenever
 the traffic leaves a private network, and `ZQNT_CLIENT_TOKEN` from its secret store — never from a
-committed file. There is deliberately no built-in development credential: the local platform
+committed file. A client running inside an installation whose traffic is encrypted sets
+`ZQNT_INTERNAL_TLS=true`: every service is then dialled over TLS and verified against the
+installation's CA in `ZQNT_INTERNAL_TLS_CA` (a service's own `_USE_PLAINTEXT` still wins when set);
+programmatically, `builder().connector().tlsCaFile("/etc/zqnt/internal-tls/ca.crt")`. There is deliberately no built-in development credential: the local platform
 refuses anonymous calls just like a deployment does.
 
 ##### A credential that is not one fixed token

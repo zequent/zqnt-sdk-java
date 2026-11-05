@@ -21,6 +21,11 @@ public class ServiceConfig {
     @Builder.Default
     private boolean usePlaintext = true;
 
+    // With usePlaintext=false: the CA (PEM) the service's certificate is verified against, e.g. the
+    // installation's internal CA; null = the system trust store.
+    @Builder.Default
+    private String tlsCaFile = null;
+
     // Stork service discovery
     @Builder.Default
     private boolean useStork = false;
