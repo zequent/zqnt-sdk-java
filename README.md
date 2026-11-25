@@ -116,6 +116,56 @@ new CapabilityReporter(adapter, gateway).track(sn);
 TelemetryPublisher telemetry = new TelemetryPublisher(liveDataChannel, liveData);
 ```
 
+### Attaching to a local Edge Node
+
+On a device that runs an Edge Node (`zqnt-edge-node`), the adapter talks to the node instead of the
+platform. The node queues live data while its link is down and runs the platform's commands on the
+adapter. Two Unix sockets, from the environment or in code:
+
+```bash
+ZQNT_EDGE_NODE_SOCKET=/run/zqnt-edge-node/node.sock    # the node's socket
+ZQNT_ADAPTER_SOCKET=/run/zqnt-adapter/acme.sock        # this adapter's socket
+```
+
+```java
+EdgeNodeConfig config = EdgeNodeConfig.fromEnv().orElseThrow();   // or new EdgeNodeConfig(nodeSocket, adapterSocket)
+try (EdgeNode node = EdgeNode.attach(config);
+        CapabilityReporter reporter = new CapabilityReporter(adapter, node.gateway())) {
+    node.serve(new EdgeAdapterGrpcServiceImpl(adapter, protoJsonMapper), new EdgeAdapterV3GrpcServiceImpl(adapter));
+    reporter.track(sn);
+    node.telemetry().publish(sample);
+    LiveDataService liveData = new LiveDataServiceImpl(telemetryMapper, detectionMapper, notificationMapper,
+            LiveDataServiceGrpc.newStub(node.channel()), node.gateway());   // command events go to the node
+}
+```
+
+Set both sockets or neither. Attached, the adapter:
+
+- serves `EdgeAdapterService` on its own socket (`EdgeNode.serve`, mode `0660`: owner and group; the
+  socket gets its mode before it appears at its path) and the node calls it there for every command.
+  `serve` needs `io.grpc:grpc-netty-shaded` (epoll, Linux) on the classpath; an adapter with its own
+  gRPC server (Quarkus on a domain socket) serves there itself and uses only the clients;
+- sends live data (`node.telemetry()`), capability reports and command events (`node.gateway()`) to the
+  node socket, naming its own socket in the `zqnt-adapter-endpoint` header
+  (`unix:///run/zqnt-adapter/acme.sock`). The node serves v3 only, so there is no v2 fallback;
+- has no access to core: nothing is written to Redis and no channel to a core service is needed;
+- **does not verify the platform's token** on commands, because the node does not sign them yet
+  (zqnt-api#40). `EdgeAuthConfig.fromEnv()` sets `attachedToEdgeNode` when both sockets are set, and
+  `PlatformAuthServerInterceptor` then lets commands from a Unix domain socket peer through with a
+  warning; the socket's permissions are the only access control. A call over TCP (a server the adapter
+  still runs on a port) is verified as always. Direct mode is unchanged.
+
+The node's queue tells the adapter how hard to push (`node.queue()`):
+
+```java
+double rate = normalRate * node.queue().get().join().throttle("LANE_TELEMETRY");   // 1 up to half full, 0.1 when full
+AutoCloseable watch = node.queue().watch(stats -> limiter.setRate(normalRate * stats.throttle("LANE_TELEMETRY")),
+        error -> log.warn("queue watch ended", error));                            // at once, on change, every 10 s
+```
+
+`QueueStats.connected()` says whether the node has a link to the platform; each lane carries its
+items, bytes, quota, fill, dropped count and oldest item.
+
 ### Conformance kit
 
 ```java
@@ -149,7 +199,16 @@ Both directions of an adapter's gRPC traffic are authenticated (package `com.zqn
   against the static key, or the key set's key without `kid`. Without either setting it refuses
   everything. `ZQNT_EDGE_AUTH_DISABLED=true` accepts unauthenticated commands (local SITL only).
 
-`EdgeAuthConfig.fromEnv()` reads all of them.
+Inside an installation whose traffic is encrypted ([Securing an installation](https://github.com/zequent/zqnt-docs/blob/main/admin/securing-an-installation.md)),
+`com.zqnt.sdk.edge.tls.InternalTls` is how the adapter dials the platform: with
+`ZQNT_INTERNAL_TLS=true` every channel built with `InternalTls.fromEnv().channelBuilder(host, port)`
+uses TLS, verifying the service's certificate against the installation's CA
+(`ZQNT_INTERNAL_TLS_CA`, default `/etc/zqnt/internal-tls/ca.crt`) and its host name, and an
+`https://` key-set URL is verified the same way; without the switch the channels are plaintext as
+before. The edge credential keeps authenticating the adapter — no client certificate is involved.
+
+`EdgeAuthConfig.fromEnv()` reads all of them. Attached to a local Edge Node the inbound check is off for Unix socket peers only
+(see [Attaching to a local Edge Node](#attaching-to-a-local-edge-node)).
 
 
 ## Client SDK
@@ -239,11 +298,15 @@ integration maps the same names.
 | `LIVE_DATA_SERVICE_HOST` / `_PORT` / `_USE_PLAINTEXT` | `localhost` / `8003` / `true` |
 | `MISSION_AUTONOMY_SERVICE_HOST` / `_PORT` / `_USE_PLAINTEXT` | `localhost` / `8004` / `true` |
 | `ZQNT_CLIENT_TOKEN` | none — issue one in your local console too |
+| `ZQNT_INTERNAL_TLS` / `ZQNT_INTERNAL_TLS_CA` | `false` / `/etc/zqnt/internal-tls/ca.crt` |
 
 With nothing set, a developer reaches the local stack (`quarkus:dev` or `docker-compose.local.yml`).
 A deployment sets the hosts, `_USE_PLAINTEXT=false` for TLS against the system trust store whenever
 the traffic leaves a private network, and `ZQNT_CLIENT_TOKEN` from its secret store — never from a
-committed file. There is deliberately no built-in development credential: the local platform
+committed file. A client running inside an installation whose traffic is encrypted sets
+`ZQNT_INTERNAL_TLS=true`: every service is then dialled over TLS and verified against the
+installation's CA in `ZQNT_INTERNAL_TLS_CA` (a service's own `_USE_PLAINTEXT` still wins when set);
+programmatically, `builder().connector().tlsCaFile("/etc/zqnt/internal-tls/ca.crt")`. There is deliberately no built-in development credential: the local platform
 refuses anonymous calls just like a deployment does.
 
 ##### A credential that is not one fixed token
@@ -603,3 +666,16 @@ packages of the old repositories; never put old and new artifacts on one classpa
 ## License
 
 Licensed under the [Apache License, Version 2.0](LICENSE); see [NOTICE](NOTICE).
+
+### Dependency licences
+
+CI fails when a dependency's licence is not allowed by [licences/policy.yaml](licences/policy.yaml)
+(the same policy in every Zequent SDK; human-readable in the docs under `edge/licence-policy`).
+Every dependency, including test-only ones, is listed in [THIRD_PARTY.md](THIRD_PARTY.md).
+After changing a dependency in a `pom.xml`, run `scripts/licence-gate.sh` (needs Maven and `uv`) and commit `THIRD_PARTY.md`.
+A dependency the policy rejects but that was reviewed goes into
+[licences/exceptions.yaml](licences/exceptions.yaml) with reason, reviewer and date.
+
+Code generated from a `.proto` file carries the licence of that file: never generate code from
+GPL-licensed protos (for example the Meshtastic protobufs) into this repository; such a protocol is
+spoken by a separate process.

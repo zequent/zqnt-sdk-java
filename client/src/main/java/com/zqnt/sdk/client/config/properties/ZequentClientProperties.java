@@ -55,6 +55,19 @@ public interface ZequentClientProperties {
     java.util.Optional<String> clientToken();
 
     /**
+     * Inside an installation with internal TLS ({@code zequent.internal-tls}, environment variable
+     * {@code ZQNT_INTERNAL_TLS}): every service is dialled over TLS, verified against the
+     * installation's CA in {@link #internalTlsCa()}. A service's own {@code use-plaintext=true} keeps
+     * that service plain.
+     */
+    @WithDefault("false")
+    boolean internalTls();
+
+    /** The installation's CA (PEM), {@code ZQNT_INTERNAL_TLS_CA}. */
+    @WithDefault("/etc/zqnt/internal-tls/ca.crt")
+    String internalTlsCa();
+
+    /**
      * Global resilience configuration.
      */
     ResilienceProperties resilience();
@@ -70,8 +83,11 @@ public interface ZequentClientProperties {
         @WithDefault("9090")
         int port();
 
-        @WithDefault("true")
-        boolean usePlaintext();
+        /** Plaintext, unless {@code zequent.internal-tls} is on and this is left unset. */
+        java.util.Optional<Boolean> usePlaintext();
+
+        /** With TLS: the CA (PEM) the service's certificate is verified against; unset = system trust store. */
+        java.util.Optional<String> tlsCaFile();
 
         @WithDefault("false")
         boolean useStork();

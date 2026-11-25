@@ -377,6 +377,7 @@ public class ZequentClient implements AutoCloseable {
         private String host = "localhost";
         private Integer port;
         private boolean usePlaintext = true;
+        private String tlsCaFile;
         private boolean useStork = false;
         private String storkServiceName;
         private ServiceConfig.LoadBalancerType loadBalancerType;
@@ -399,6 +400,13 @@ public class ZequentClient implements AutoCloseable {
 
         public ServiceConfigBuilder usePlaintext(boolean usePlaintext) {
             this.usePlaintext = usePlaintext;
+            return this;
+        }
+
+        /** TLS verified against the CA (PEM) at {@code tlsCaFile}, e.g. an installation's internal CA. */
+        public ServiceConfigBuilder tlsCaFile(String tlsCaFile) {
+            this.tlsCaFile = tlsCaFile;
+            this.usePlaintext = false;
             return this;
         }
 
@@ -433,6 +441,7 @@ public class ZequentClient implements AutoCloseable {
                     .host(host)
                     .port(port != null ? port : getDefaultPort())
                     .usePlaintext(usePlaintext)
+                    .tlsCaFile(usePlaintext ? null : tlsCaFile)
                     .useStork(useStork)
                     .storkServiceName(storkServiceName != null ? storkServiceName : serviceName + "-service")
                     .loadBalancerType(loadBalancerType != null ? loadBalancerType : parent.defaultLoadBalancerType)

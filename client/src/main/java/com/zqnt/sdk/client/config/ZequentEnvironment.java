@@ -18,6 +18,11 @@ import java.util.function.Function;
  * {@value #MISSION_AUTONOMY}; the credential in {@code ZQNT_CLIENT_TOKEN} (from a secret, never a
  * committed file). The Quarkus integration reads the same names (see the SDK's
  * {@code application.properties}), so one {@code .env} works for every language and framework.</p>
+ *
+ * <p><b>Inside an installation with internal TLS</b> (zqnt-core #371): {@code ZQNT_INTERNAL_TLS=true}
+ * dials every service over TLS, verifying its certificate against the installation's CA in
+ * {@code ZQNT_INTERNAL_TLS_CA} (default {@value #DEFAULT_INTERNAL_TLS_CA}) and its host name. A
+ * service's own {@code <PREFIX>_USE_PLAINTEXT} still wins when set.</p>
  */
 public final class ZequentEnvironment {
 
@@ -34,6 +39,10 @@ public final class ZequentEnvironment {
             "mission-autonomy", 8004);
 
     public static final String LOCAL_HOST = "localhost";
+
+    public static final String INTERNAL_TLS = "ZQNT_INTERNAL_TLS";
+    public static final String INTERNAL_TLS_CA = "ZQNT_INTERNAL_TLS_CA";
+    public static final String DEFAULT_INTERNAL_TLS_CA = "/etc/zqnt/internal-tls/ca.crt";
 
     private ZequentEnvironment() {
     }
@@ -58,11 +67,21 @@ public final class ZequentEnvironment {
         String host = blankToNull(env.apply(prefix + "_HOST"));
         String port = blankToNull(env.apply(prefix + "_PORT"));
         String plaintext = blankToNull(env.apply(prefix + "_USE_PLAINTEXT"));
+        String internalTls = blankToNull(env.apply(INTERNAL_TLS));
+        boolean internalTlsOn = internalTls != null && parseBoolean(internalTls);
+        boolean usePlaintext = plaintext != null ? parseBoolean(plaintext) : !internalTlsOn && local.isUsePlaintext();
         return local.toBuilder()
                 .host(host != null ? host : local.getHost())
                 .port(port != null ? parsePort(prefix + "_PORT", port) : local.getPort())
-                .usePlaintext(plaintext != null ? parseBoolean(plaintext) : local.isUsePlaintext())
+                .usePlaintext(usePlaintext)
+                .tlsCaFile(internalTlsOn ? internalTlsCa(env) : null)
                 .build();
+    }
+
+    /** The installation's CA file ({@code ZQNT_INTERNAL_TLS_CA}, or its default). */
+    public static String internalTlsCa(Function<String, String> env) {
+        String ca = blankToNull(env.apply(INTERNAL_TLS_CA));
+        return ca != null ? ca : DEFAULT_INTERNAL_TLS_CA;
     }
 
     static int localPort(String serviceName) {
